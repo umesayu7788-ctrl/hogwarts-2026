@@ -1,0 +1,59 @@
+name: Urgent Post (Discord /add-idea)
+
+on:
+  workflow_dispatch:
+    inputs:
+      idea:
+        description: '投稿するネタ（Discord /add-idea から受け取る）'
+        required: true
+      dry_run:
+        description: 'テストモード（投稿せず案だけDiscordに送る）'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+env:
+  DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+
+jobs:
+  urgent-post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+
+      - name: Run urgent post
+        env:
+          IDEA: ${{ github.event.inputs.idea }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: cd scripts && python urgent_post.py
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"content\": \"❌ 緊急投稿に失敗しました。GitHubのActionsログを確認してください。\"}"
+          fi

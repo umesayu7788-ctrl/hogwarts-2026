@@ -1,0 +1,109 @@
+name: Daily Threads Operation Cycle
+
+on:
+  schedule:
+    - cron: '37 20 * * *'  # JST 05:37（メイン実行）
+    - cron: '26 21 * * *'  # JST 06:26（予備1・混雑回避）
+    - cron: '51 22 * * *'  # JST 07:51（予備2・最終手段）
+  workflow_dispatch:
+    inputs:
+      theme:
+        description: '今日のテーマ（空白の場合はAIが自動選定）'
+        required: false
+        default: ''
+
+permissions:
+  issues: write
+  contents: read
+
+env:
+  DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+
+jobs:
+  run-daily-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+
+      - name: Check if today already completed
+        id: skip_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          ISSUE_NUMBER=$(gh api "repos/${{ github.repository }}/issues?labels=daily-operation&state=all&per_page=5" \
+            --jq ".[] | select(.title | contains(\"$TODAY\")) | .number" 2>/dev/null | head -1 || echo "")
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "should_run=RUN" >> "$GITHUB_OUTPUT"
+            echo "No Issue found for today - running cycle."
+          else
+            HERMIONE_COMMENT=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
+              --jq '.[] | select(.body | contains("ハーマイオニーより")) | .body' 2>/dev/null | head -1 || echo "")
+            if [ -n "$HERMIONE_COMMENT" ]; then
+              echo "should_run=SKIP" >> "$GITHUB_OUTPUT"
+              echo "Hermione already completed today's cycle - skipping."
+            else
+              echo "should_run=RUN" >> "$GITHUB_OUTPUT"
+              echo "Issue exists but Hermione not done yet - running cycle."
+            fi
+          fi
+
+      - name: Step 1-2 - Hermione Research
+        if: steps.skip_check.outputs.should_run != 'SKIP'
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: cd scripts && python hermione_research.py --theme "${{ github.event.inputs.theme }}"
+
+      - name: Step 3-4 - Luna & Malfoy (auto-retry)
+        if: steps.skip_check.outputs.should_run != 'SKIP'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          cd scripts
+          MAX_RETRY=2
+          attempt=0
+          while [ $attempt -le $MAX_RETRY ]; do
+            echo "=== Luna write attempt $((attempt+1))/$((MAX_RETRY+1)) ==="
+            python luna_write.py
+            echo "=== Malfoy review attempt $((attempt+1))/$((MAX_RETRY+1)) ==="
+            set +e
+            python malfoy_review.py
+            exit_code=$?
+            set -e
+            if [ $exit_code -eq 0 ]; then
+              echo "Approved"
+              break
+            elif [ $exit_code -eq 10 ]; then
+              attempt=$((attempt+1))
+              if [ $attempt -gt $MAX_RETRY ]; then
+                echo "Max retries reached"
+                python -c "import os; from utils.github_issues import GitHubIssues; gh=GitHubIssues(os.getenv('GITHUB_TOKEN'),os.getenv('GITHUB_REPO')); issue=gh.get_or_create_today_issue(); gh.update_pipeline_status(issue.number,'malfoy','rejected_final'); gh.add_comment(issue.number,'## Warning: auto-retry limit\n\nManual fix needed. Comment with fix: instructions.')"
+                python -c "import os,requests; url=os.getenv('DISCORD_WEBHOOK_URL',''); url and requests.post(url,json={'content':'Warning: review rejected multiple times'},timeout=15)"
+                exit 0
+              fi
+              echo "Rejected - retry in 30s"
+              sleep 30
+            else
+              echo "Unexpected error: $exit_code"
+              exit $exit_code
+            fi
+          done

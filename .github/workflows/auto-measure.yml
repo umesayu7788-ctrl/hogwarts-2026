@@ -1,0 +1,67 @@
+name: Auto-Measure All Posts (Daily)
+
+# 毎日22:00 JST に前日の全投稿を自動計測する
+on:
+  schedule:
+    - cron: '17 13 * * *'  # 22:17 JST (UTC 13:17) ※混雑回避
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: '計測対象日（YYYY-MM-DD、空白=昨日）'
+        required: false
+        default: ''
+
+permissions:
+  issues: write
+  contents: write          # kb_sys_ref_v001.md更新のため
+
+env:
+  DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+
+jobs:
+  auto-measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+
+      - name: Measure all yesterday's posts
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
+            mkdir -p credentials
+            echo "$GOOGLE_CREDENTIALS_JSON" > credentials/sheets_service_account.json
+            export GOOGLE_CREDENTIALS_PATH=credentials/sheets_service_account.json
+          fi
+          cd scripts
+          python ron_auto_measure.py --target-date "${{ github.event.inputs.target_date }}"
+
+      - name: Commit kb_sys_ref_v001.md if updated
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add operation/knowledge/kb_sys_ref_v001.md 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "auto: バズ投稿ナレッジを追記"
+            git push
+          fi

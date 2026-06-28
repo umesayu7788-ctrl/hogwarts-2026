@@ -1,0 +1,55 @@
+name: Measure Post Engagement (Ron Step 6)
+
+on:
+  workflow_dispatch:
+    inputs:
+      post_id:
+        description: 'Threads Post ID to measure'
+        required: true
+      issue_number:
+        description: 'GitHub Issue number for this post'
+        required: true
+
+permissions:
+  issues: write
+  contents: read
+
+env:
+  DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+
+jobs:
+  measure-engagement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd scripts
+          pip install -r requirements.txt
+
+
+      - name: Step 6 - Ron Fetches Engagement Data
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
+            mkdir -p credentials
+            echo "$GOOGLE_CREDENTIALS_JSON" > credentials/sheets_service_account.json
+            export GOOGLE_CREDENTIALS_PATH=credentials/sheets_service_account.json
+          fi
+          python scripts/ron_fetch.py \
+            --post-id "${{ github.event.inputs.post_id }}" \
+            --issue-number "${{ github.event.inputs.issue_number }}"

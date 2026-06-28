@@ -1,0 +1,55 @@
+name: Approve and Post (SLOT_1)
+
+# GitHub Issueに「承認」とコメントすると即時投稿される
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  contents: read
+
+env:
+  DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+
+jobs:
+  post:
+    # daily-operationラベルのIssueへのコメントで、「承認」を含み、Botでなく、「申請」を含まない場合のみ実行
+    if: |
+      contains(github.event.issue.labels.*.name, 'daily-operation') &&
+      contains(github.event.comment.body, '承認') &&
+      !contains(github.event.comment.body, '申請') &&
+      github.event.comment.user.type != 'Bot' &&
+      (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+
+      - name: Post SLOT_1 immediately
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          # サービスアカウントJSONをリポジトリルートのcredentials/に書き出す
+          if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
+            mkdir -p credentials
+            echo "$GOOGLE_CREDENTIALS_JSON" > credentials/sheets_service_account.json
+            export GOOGLE_CREDENTIALS_PATH=credentials/sheets_service_account.json
+          fi
+          python scripts/ron_post.py

@@ -1,0 +1,75 @@
+name: Auto Refresh Threads Token (Weekly)
+
+on:
+  schedule:
+    # 毎週日曜 AM8:00 JST（= 日曜 23:00 UTC）
+    - cron: '0 23 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+
+jobs:
+  refresh-threads-token:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests python-dotenv loguru
+
+      - name: Refresh Threads Token
+        id: refresh
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          python scripts/refresh_threads_token.py
+
+      - name: Update GitHub Secret with new token (requires GH_PAT)
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "WARNING: GH_PAT secret 未設定。secret更新スキップ（アーティファクトで受け渡し）"
+            exit 0
+          fi
+          NEW_TOKEN=$(cat new_token.txt)
+          gh secret set THREADS_ACCESS_TOKEN --body "$NEW_TOKEN"
+          echo "GitHub Secret THREADS_ACCESS_TOKEN を更新しました"
+
+      - name: Upload token as artifact (フォールバック手段)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-threads-token
+          path: new_token.txt
+          retention-days: 1
+          if-no-files-found: ignore
+
+      - name: Cleanup
+        if: always()
+        run: rm -f new_token.txt
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"content\": \"⚠️ **Threadsトークン自動更新に失敗しました**\\n手動更新が必要です。\\n\\n手順: operation/GAS_SLOT2_SLOT3_SETUP.md の緊急時セクションを参照\"}"
+          fi

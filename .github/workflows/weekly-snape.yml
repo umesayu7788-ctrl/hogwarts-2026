@@ -1,0 +1,49 @@
+name: Weekly Snape Monitoring Report
+
+on:
+  schedule:
+    # 毎週月曜日 AM 6:00 JST (日曜 UTC 21:00) に起動
+    - cron: '0 21 * * 0'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: write
+
+env:
+  DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+
+jobs:
+  snape-weekly-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd scripts
+          pip install -r requirements.txt
+
+      - name: Snape - Generate Weekly Report
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          python scripts/snape_report.py
+
+      - name: Commit Snape report to repository
+        run: |
+          git config --local user.email "snape@hogwarts-agents.bot"
+          git config --local user.name "Snape (Agent)"
+          git add operation/weekly/
+          git diff --staged --quiet || git commit -m "📊 Snape週次レポート: $(date '+%Y年W%V')"
+          git push

@@ -1,0 +1,71 @@
+name: Scheduled Post SLOT_3 (21:00 JST)
+
+# ⚠️ SLOT_3専用ワークフロー。SLOT_2と統合しないこと（cronが競合してSLOT_2が無視される）
+on:
+  schedule:
+    - cron: '47 11 * * *'  # メイン: 20:47 JST ※cron値は変更しないこと
+    - cron: '17 12 * * *'  # 予備:  21:17 JST
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+env:
+  DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+
+jobs:
+  scheduled-post-slot3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+
+      - name: Check if SLOT_3 already posted
+        id: posted_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          ISSUE_NUMBER=$(gh api "repos/${{ github.repository }}/issues?labels=daily-operation&state=all&per_page=5" \
+            --jq ".[] | select(.title | contains(\"$TODAY\")) | .number" 2>/dev/null | head -1 || echo "")
+          if [ -n "$ISSUE_NUMBER" ]; then
+            POSTED=$(gh api "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments" \
+              --jq ".[] | select(.body | contains(\"21時\") and (.body | contains(\"投稿完了\"))) | .id" \
+              2>/dev/null | head -1 || echo "")
+            if [ -n "$POSTED" ]; then
+              echo "should_run=SKIP" >> "$GITHUB_OUTPUT"
+              echo "SLOT_3 already posted today - skipping."
+              exit 0
+            fi
+          fi
+          echo "should_run=RUN" >> "$GITHUB_OUTPUT"
+          echo "SLOT_3 not posted yet - running."
+
+      - name: Post SLOT_3
+        if: steps.posted_check.outputs.should_run != 'SKIP'
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
+            mkdir -p credentials
+            echo "$GOOGLE_CREDENTIALS_JSON" > credentials/sheets_service_account.json
+            export GOOGLE_CREDENTIALS_PATH=credentials/sheets_service_account.json
+          fi
+          python scripts/ron_scheduled_post.py --slot 3
