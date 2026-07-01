@@ -1,0 +1,33 @@
+# エージェントホグワーツ - 依存パッケージ
+# Python 3.11+ 推奨
+
+# Google Gemini API（新SDK: 2025年以降の標準）
+google-genai>=1.0.0
+
+# YouTube Data API
+google-api-python-client>=2.100.0
+
+# RSS フィード取得
+feedparser>=6.0.10
+
+# HTTP リクエスト
+requests>=2.31.0
+
+# GitHub API
+PyGithub>=2.1.0
+
+# 環境変数管理
+python-dotenv>=1.0.0
+
+# 日時処理
+python-dateutil>=2.8.2
+
+# JSON / データ処理
+pandas>=2.0.0
+
+# ロギング
+loguru>=0.7.0
+
+# Google Sheets API
+gspread>=6.0.0
+google-auth>=2.20.0

@@ -1,23 +1,40 @@
-# Hogwarts
+# エージェントホグワーツ メンバー版
 
-AI agent project workspace for building and running automated workflows.
+AIエージェントチームがあなたのThreadsアカウントの投稿を自動作成・管理するシステムです。
 
-## Setup
+## 始め方
 
-1. Clone this repository
-2. Configure secrets (see project documentation)
-3. Set up the Threads API token
+**Claude Code** でこのフォルダを開いて、チャットに「**始める**」と入力するだけです。
+セットアップの全手順が自動でガイドされます。
 
-## Project Status
+## 必要なもの
 
-See [claude.md](./claude.md) for the current setup session progress and next steps.
+- [Claude Code](https://claude.ai/code)（無料）
+- Gemini API キー（無料）
+- GitHub アカウント（無料）
 
-## Requirements
+## ⚠️ 重要：初回セットアップ後にやること
 
-- Python 3.x
-- Node.js (for tooling and integrations)
-- GitHub CLI (`gh`)
+### 1. 各ワークフローを手動で1回実行する
 
-## License
+GitHubリポジトリを作成したら、**各ワークフローを手動で1回実行**してください。  
+GitHubの仕様により、一度も実行されていないワークフローのcron（自動実行）は有効になりません。
 
-Private project.
+手順：
+1. GitHubリポジトリの「Actions」タブを開く
+2. 左側のワークフロー一覧から各ワークフローを選択
+3. 「Run workflow」ボタンをクリックして手動実行
+4. 全ワークフローで1回ずつ実行すればcronが有効になります
+
+## ⏰ 時刻トリガーの設定（必須・初回のみ）
+
+GitHub Actions cronの遅延問題を回避するため、Google Apps Scriptで
+時刻トリガーを設定してください。
+
+→ 詳細手順：[SETUP_GAS_TRIGGER.md](./SETUP_GAS_TRIGGER.md)
+
+所要時間：約10分 / 費用：無料
+
+## ライセンス
+
+本パッケージはコミュニティメンバー限定の配布物です。詳細は [LICENSE.md](LICENSE.md) をご確認ください。

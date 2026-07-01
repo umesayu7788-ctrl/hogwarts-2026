@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(scripts/**)",
+      "Read(.github/**)",
+      "Read(docs/**)",
+      "Edit(CLAUDE.md)",
+      "Edit(.claude/settings.json)",
+      "Edit(SYS_VER_LOCK.md)",
+      "Edit(scripts/utils/auth_check.py)",
+      "Edit(.github/**)",
+      "Edit(operation/auth/**)",
+      "Edit(operation/knowledge/**)"
+    ]
+  }
+}

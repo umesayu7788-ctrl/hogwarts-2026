@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>🏰 エージェントホグワーツ</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0D1117;
+  --bg2:       #111827;
+  --sidebar:   #0A0E1A;
+  --card:      #131929;
+  --card2:     #192035;
+  --border:    #2A3A5C;
+  --border2:   #3A4F7A;
+  --gold:      #D4AF37;
+  --gold2:     #F0D060;
+  --gold-dim:  #8A7020;
+  --text:      #E8D5A3;
+  --text2:     #9A8B6A;
+  --text3:     #5A4E35;
+  --gryff:  #AE0001; --gryff-glow: rgba(174,0,1,0.35);
+  --slyt:   #2A9A4A; --slyt-glow:  rgba(42,154,74,0.3);
+  --raven:  #4E6BAF; --raven-glow: rgba(78,107,175,0.3);
+  --run-bg: rgba(212,175,55,0.12); --run-bd: #D4AF37; --run-tx: #F0D060;
+  --done-bg:rgba(26,71,42,0.25);  --done-bd:#5DBB7A; --done-tx:#7DDB9A;
+  --pend-bg:rgba(174,0,1,0.15);   --pend-bd:#AE0001; --pend-tx:#FF6060;
+  --wait-bg:rgba(42,58,92,0.3);   --wait-bd:#2A3A5C; --wait-tx:#6A7A9A;
+  --err-bg: rgba(200,50,50,0.2);  --err-bd: #E07070; --err-tx: #FF9090;
+  --r: 12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:'Crimson Text',Georgia,serif;
+  background:var(--bg);color:var(--text);
+  display:flex;height:100dvh;
+  background-image:
+    radial-gradient(ellipse at 20% 50%,rgba(42,154,74,0.06) 0%,transparent 60%),
+    radial-gradient(ellipse at 80% 20%,rgba(14,26,64,0.12) 0%,transparent 60%),
+    radial-gradient(ellipse at 60% 80%,rgba(174,0,1,0.05) 0%,transparent 50%);
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    radial-gradient(1px 1px at 8%  12%,rgba(212,175,55,0.7) 0%,transparent 100%),
+    radial-gradient(1px 1px at 22% 38%,rgba(255,255,255,0.5) 0%,transparent 100%),
+    radial-gradient(1px 1px at 38%  8%,rgba(212,175,55,0.6) 0%,transparent 100%),
+    radial-gradient(1px 1px at 55% 22%,rgba(255,255,255,0.4) 0%,transparent 100%),
+    radial-gradient(1px 1px at 72%  6%,rgba(212,175,55,0.5) 0%,transparent 100%),
+    radial-gradient(1px 1px at 88% 32%,rgba(255,255,255,0.6) 0%,transparent 100%),
+    radial-gradient(1px 1px at 14% 68%,rgba(212,175,55,0.4) 0%,transparent 100%),
+    radial-gradient(1px 1px at 82% 62%,rgba(255,255,255,0.4) 0%,transparent 100%),
+    radial-gradient(1.5px 1.5px at 48% 48%,rgba(212,175,55,0.8) 0%,transparent 100%),
+    radial-gradient(1px 1px at 33% 82%,rgba(255,255,255,0.5) 0%,transparent 100%);
+}
+
+/* ─── サイドバー ─── */
+.sb{width:200px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:relative;z-index:10;box-shadow:4px 0 20px rgba(0,0,0,0.5)}
+.sb::after{content:'';position:absolute;right:0;top:0;bottom:0;width:1px;background:linear-gradient(to bottom,transparent,var(--gold-dim),transparent)}
+.sb-logo{padding:20px 16px 16px;border-bottom:1px solid var(--border);text-align:center}
+.sb-logo h1{font-family:'Cinzel',serif;font-size:13px;font-weight:700;color:var(--gold);letter-spacing:1px;line-height:1.4;text-shadow:0 0 20px rgba(212,175,55,0.5)}
+.sb-logo p{font-size:10px;color:var(--text2);margin-top:4px;font-style:italic}
+.sb-crest{font-size:36px;margin-bottom:6px;filter:drop-shadow(0 0 8px rgba(212,175,55,0.6))}
+.nav{padding:8px 0}
+.nav a{display:flex;align-items:center;gap:9px;padding:10px 16px;font-family:'Crimson Text',serif;font-size:13.5px;font-weight:600;color:var(--text2);cursor:pointer;text-decoration:none;transition:.2s;border-left:2px solid transparent}
+.nav a:hover{background:rgba(212,175,55,0.06);color:var(--text);border-left-color:var(--gold-dim)}
+.nav a.active{background:rgba(212,175,55,0.1);color:var(--gold);border-left-color:var(--gold);text-shadow:0 0 12px rgba(212,175,55,0.4)}
+.nav-icon{width:18px;text-align:center;font-size:15px}
+.sb-bottom{padding:12px 14px;border-top:1px solid var(--border);margin-top:auto;font-size:10px;color:var(--text3);text-align:center}
+.sb-quote{font-style:italic;line-height:1.5;color:var(--text2);font-size:11px}
+
+/* ─── メイン ─── */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;position:relative;z-index:1}
+.topbar{padding:14px 22px;background:linear-gradient(to right,rgba(10,14,26,0.95),rgba(13,17,23,0.9));border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;backdrop-filter:blur(10px)}
+.topbar-left h2{font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:var(--gold);letter-spacing:.5px;text-shadow:0 0 15px rgba(212,175,55,0.4)}
+.topbar-left p{font-size:12px;color:var(--text2);margin-top:2px;font-style:italic}
+.topbar-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.btn{padding:7px 15px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:.2s;white-space:nowrap;font-family:'Cinzel',serif;letter-spacing:.3px}
+.btn-p{background:linear-gradient(135deg,#8A6020,#D4AF37,#8A6020);color:#0D1117;border:1px solid var(--gold);box-shadow:0 0 12px rgba(212,175,55,0.3)}
+.btn-p:hover{box-shadow:0 0 20px rgba(212,175,55,0.6);transform:translateY(-1px)}
+.btn-s{background:rgba(42,58,92,0.5);color:var(--text);border:1px solid var(--border2)}
+.btn-s:hover{background:rgba(42,58,92,0.8);border-color:var(--gold-dim)}
+.btn-ok{background:linear-gradient(135deg,#1A472A,#2A623D);color:#7DDB9A;border:1px solid #3DBB5A;font-size:12.5px;padding:9px 20px;box-shadow:0 0 12px rgba(45,150,70,0.3)}
+.btn-ok:hover{box-shadow:0 0 20px rgba(45,150,70,0.5);transform:translateY(-1px)}
+
+/* ─── バッジ ─── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;font-family:'Cinzel',serif;letter-spacing:.3px}
+.badge.running{background:var(--run-bg);color:var(--run-tx);border:1px solid var(--run-bd);box-shadow:0 0 8px rgba(212,175,55,0.3)}
+.badge.done   {background:var(--done-bg);color:var(--done-tx);border:1px solid var(--done-bd)}
+.badge.pending{background:var(--pend-bg);color:var(--pend-tx);border:1px solid var(--pend-bd);box-shadow:0 0 8px rgba(174,0,1,0.4)}
+.badge.waiting{background:var(--wait-bg);color:var(--wait-tx);border:1px solid var(--wait-bd)}
+.badge.error  {background:var(--err-bg);color:var(--err-tx);border:1px solid var(--err-bd)}
+
+/* ─── アニメーション ─── */
+@keyframes spin   {to{transform:rotate(360deg)}}
+@keyframes pulse  {0%,100%{opacity:1;box-shadow:0 0 6px currentColor}50%{opacity:.5;box-shadow:0 0 2px currentColor}}
+@keyframes flicker{0%,100%{opacity:1}50%{opacity:.85}75%{opacity:.95}}
+@keyframes glow   {0%,100%{text-shadow:0 0 10px rgba(212,175,55,0.5)}50%{text-shadow:0 0 25px rgba(212,175,55,0.9),0 0 50px rgba(212,175,55,0.3)}}
+@keyframes float  {0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes sparkle{0%{opacity:0;transform:translateY(0) scale(0) rotate(0deg)}40%{opacity:1;transform:translateY(-15px) scale(1) rotate(90deg)}100%{opacity:0;transform:translateY(-35px) scale(0) rotate(180deg)}}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--gold);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+
+/* ─── コンテンツ ─── */
+.content{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.content::-webkit-scrollbar{width:4px}
+.content::-webkit-scrollbar-thumb{background:var(--gold-dim);border-radius:2px}
+
+/* ─── ステータスバー ─── */
+.status-bar{background:linear-gradient(135deg,rgba(20,27,45,0.9),rgba(26,36,64,0.9));border:1px solid var(--border);border-radius:var(--r);padding:12px 18px;display:flex;align-items:center;gap:12px;font-size:13.5px;font-style:italic;backdrop-filter:blur(5px)}
+.status-bar::before{content:'🕯️';font-size:14px;animation:flicker 2s infinite}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.status-bar.running .dot{background:var(--gold);animation:pulse 1.5s infinite;box-shadow:0 0 8px var(--gold)}
+.status-bar.pending .dot{background:var(--pend-bd);animation:pulse 1.5s infinite}
+.status-bar.done    .dot{background:var(--done-bd)}
+.status-bar.error   .dot{background:var(--err-bd)}
+
+/* ─── 承認ボックス ─── */
+.approval{background:linear-gradient(135deg,rgba(174,0,1,0.1),rgba(20,27,45,0.95));border:1px solid var(--gryff);border-radius:var(--r);padding:18px 20px;display:none;box-shadow:0 0 20px rgba(174,0,1,0.2)}
+.approval.show{display:block}
+.approval-title{font-family:'Cinzel',serif;font-size:14px;font-weight:700;color:var(--gold);margin-bottom:12px;text-shadow:0 0 15px rgba(212,175,55,0.5);animation:glow 2s infinite}
+.post-text{background:rgba(10,14,26,0.8);border:1px solid var(--border2);border-radius:8px;padding:14px 16px;font-size:13px;line-height:1.8;white-space:pre-wrap;max-height:180px;overflow-y:auto;color:var(--text);margin-bottom:14px}
+.approval-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.approval-row a{font-size:12px;color:var(--gold2);text-decoration:none;font-style:italic}
+
+/* ─── セクションタイトル ─── */
+.section-title{font-family:'Cinzel',serif;font-size:11px;font-weight:600;color:var(--gold-dim);letter-spacing:2px;text-transform:uppercase;display:flex;align-items:center;gap:10px}
+.section-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,var(--border),transparent)}
+
+/* ═══════════════════════════════════
+   トランプカード グリッド
+═══════════════════════════════════ */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:1100px){.grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:680px) {.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:420px) {.grid{grid-template-columns:1fr}}
+
+/* ═══════════════════════════════════
+   トランプカード 本体
+═══════════════════════════════════ */
+.card{
+  background:linear-gradient(170deg,#171E35 0%,#111828 55%,#0E1420 100%);
+  border:1px solid var(--border);border-radius:var(--r);
+  position:relative;cursor:pointer;overflow:hidden;
+  min-height:320px;display:flex;flex-direction:column;align-items:center;
+  padding:14px 14px 52px;
+  transition:transform .25s,box-shadow .25s,border-color .25s;
+  user-select:none;-webkit-tap-highlight-color:transparent;
+}
+/* 内枠（二重枠） */
+.card::before{content:'';position:absolute;inset:7px;border-radius:7px;border:1px solid rgba(212,175,55,0.1);pointer-events:none;z-index:1;transition:border-color .3s}
+.card:hover::before{border-color:rgba(212,175,55,0.28)}
+/* 寮カラー上線 */
+.card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(to right,transparent,var(--card-accent,var(--gold-dim)),transparent);z-index:2}
+
+/* 寮別アクセント */
+.card[data-house="gryffindor"]{--card-accent:#AE0001;--card-glow:rgba(174,0,1,0.35)}
+.card[data-house="slytherin"] {--card-accent:#2A9A4A;--card-glow:rgba(42,154,74,0.3)}
+.card[data-house="ravenclaw"] {--card-accent:#4E6BAF;--card-glow:rgba(78,107,175,0.3)}
+
+.card:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 14px 40px rgba(0,0,0,0.55),0 0 25px rgba(212,175,55,0.08);border-color:var(--border2)}
+.card.running{border-color:rgba(212,175,55,0.5);box-shadow:0 0 28px rgba(212,175,55,0.18)}
+.card.done   {border-color:rgba(93,187,122,0.35)}
+.card.pending{border-color:rgba(174,0,1,0.5);box-shadow:0 0 22px rgba(174,0,1,0.14)}
+.card.error  {border-color:rgba(224,112,112,0.45)}
+
+/* ─── コーナー（トランプの A♠ 部分） ─── */
+.pc-corner{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;z-index:3;pointer-events:none}
+.pc-tl{top:14px;left:13px}
+.pc-br{bottom:14px;right:13px;transform:rotate(180deg)}
+.pc-step{font-family:'Cinzel',serif;font-size:9px;font-weight:700;color:var(--card-accent,var(--gold-dim));letter-spacing:.5px;line-height:1}
+
+/* コーナーSVGアイコン */
+.pc-corner-icon{width:20px;height:20px;color:var(--card-accent,var(--gold-dim));opacity:.85}
+.pc-corner-icon svg{width:100%;height:100%}
+
+/* ─── 中央エリア ─── */
+.pc-center{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 30px 0;gap:7px;flex:1;position:relative;z-index:2;width:100%}
+
+/* 寮の紋章画像 */
+.pc-animal{width:88px;height:100px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.pc-animal img{
+  width:100%;height:100%;object-fit:contain;
+  filter:drop-shadow(0 0 8px var(--card-glow,rgba(212,175,55,0.35))) drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+  transition:filter .3s, transform .3s;
+}
+.card:hover .pc-animal img{
+  filter:drop-shadow(0 0 18px var(--card-glow,rgba(212,175,55,0.7))) drop-shadow(0 4px 10px rgba(0,0,0,0.5));
+  transform:scale(1.06);
+}
+.pc-animal img.floating{animation:float 2.2s ease-in-out infinite}
+
+/* 名前（大きく太く） */
+.pc-name{font-family:'Cinzel',serif;font-size:20px;font-weight:900;color:var(--gold);letter-spacing:.5px;text-shadow:0 0 18px rgba(212,175,55,0.45);line-height:1.15}
+.pc-role{font-size:13px;color:var(--text2);font-style:italic;margin-top:1px;font-weight:600}
+.pc-badge-wrap{margin-top:8px}
+
+/* ─── 説明テキスト ─── */
+.pc-desc{width:100%;font-size:12px;color:var(--text2);line-height:1.65;text-align:center;padding:10px 10px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;position:relative;z-index:2}
+.pc-activity{width:100%;font-size:11px;color:var(--text3);font-style:italic;text-align:center;padding:4px 10px 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;position:relative;z-index:2}
+.pc-score{font-family:'Cinzel',serif;font-size:12px;font-weight:700;color:var(--gold);text-align:center;position:relative;z-index:2;margin-top:4px}
+.card-time{position:absolute;bottom:40px;left:0;right:0;text-align:center;font-size:9.5px;color:var(--text3);font-style:italic;z-index:3;pointer-events:none}
+
+/* 実行中スパークル */
+.sparkle{position:absolute;pointer-events:none;font-size:13px;z-index:4;animation:sparkle 2.2s ease-in-out infinite}
+.sparkle:nth-child(1){top:38px;right:12px;animation-delay:0s}
+.sparkle:nth-child(2){top:56px;right:30px;animation-delay:.75s}
+.sparkle:nth-child(3){top:42px;right:50px;animation-delay:1.4s}
+
+/* ═══════════════════════════════════
+   ✨ 魔法クリックアニメーション
+═══════════════════════════════════ */
+@keyframes card-glow-burst{0%{box-shadow:0 0 15px rgba(212,175,55,0.15)}35%{box-shadow:0 0 70px rgba(212,175,55,0.85),0 0 110px rgba(212,175,55,0.35),inset 0 0 30px rgba(212,175,55,0.12)}100%{box-shadow:0 0 20px rgba(212,175,55,0.15)}}
+@keyframes magic-ring-a{0%{opacity:1;transform:translate(-50%,-50%) scale(0) rotate(0deg)}70%{opacity:.6}100%{opacity:0;transform:translate(-50%,-50%) scale(1.8) rotate(180deg)}}
+@keyframes magic-ring-b{0%{opacity:.9;transform:translate(-50%,-50%) scale(0) rotate(0deg)}70%{opacity:.5}100%{opacity:0;transform:translate(-50%,-50%) scale(1.2) rotate(-130deg)}}
+@keyframes magic-rune{0%{opacity:0;transform:translate(-50%,-50%) scale(0) rotate(0deg)}20%{opacity:.9}100%{opacity:0;transform:translate(-50%,-50%) scale(1) rotate(360deg)}}
+@keyframes magic-star-fly{0%{opacity:1;transform:translate(-50%,-50%) rotate(var(--a)) translateX(8px) scale(1.2)}100%{opacity:0;transform:translate(-50%,-50%) rotate(var(--a)) translateX(95px) scale(0)}}
+@keyframes magic-flash{0%,100%{opacity:0}20%{opacity:.18}50%{opacity:.08}}
+
+.card.casting{animation:card-glow-burst .9s ease-out}
+.magic-overlay{position:absolute;inset:0;pointer-events:none;z-index:50;border-radius:inherit;overflow:visible}
+.magic-overlay::before{content:'';position:absolute;width:150px;height:150px;top:50%;left:50%;border:2px solid var(--gold);border-radius:50%;animation:magic-ring-a .9s ease-out forwards}
+.magic-overlay::after{content:'';position:absolute;width:95px;height:95px;top:50%;left:50%;border:1.5px solid var(--gold2);border-radius:50%;animation:magic-ring-b .9s .08s ease-out forwards}
+.magic-rune{position:absolute;top:50%;left:50%;font-size:48px;line-height:1;animation:magic-rune .9s ease-out forwards;pointer-events:none;color:var(--gold);opacity:0;text-shadow:0 0 20px rgba(212,175,55,0.8)}
+.magic-flash{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,rgba(212,175,55,0.25),transparent 70%);animation:magic-flash .9s ease-out forwards;pointer-events:none;border-radius:inherit}
+.magic-star{position:absolute;top:50%;left:50%;font-size:15px;line-height:1;animation:magic-star-fly .9s ease-out forwards;pointer-events:none}
+
+/* ─── モーダル ─── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(5,8,15,0.85);z-index:200;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)}
+.overlay.open{display:flex}
+.modal{background:linear-gradient(145deg,#0D1320,#141B2D);border:1px solid var(--border2);border-radius:14px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.6),0 0 40px rgba(212,175,55,0.1)}
+.modal-title{font-family:'Cinzel',serif;font-size:17px;font-weight:700;color:var(--gold);margin-bottom:20px;text-align:center;text-shadow:0 0 15px rgba(212,175,55,0.4)}
+.modal-title::before{content:'⚡ '}.modal-title::after{content:' ⚡'}
+.fg{margin-bottom:14px}
+.fg label{font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px;letter-spacing:.5px;font-family:'Cinzel',serif;text-transform:uppercase}
+.fg input{width:100%;padding:10px 13px;background:rgba(10,14,26,0.8);border:1px solid var(--border2);border-radius:7px;font-size:13px;color:var(--text);outline:none;transition:.2s;font-family:'Crimson Text',serif}
+.fg input:focus{border-color:var(--gold-dim);box-shadow:0 0 10px rgba(212,175,55,0.15)}
+.modal-row{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+
+/* ─── セットアップ ─── */
+.setup{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:16px;text-align:center;padding:24px}
+.setup-icon{font-size:64px;animation:float 3s ease-in-out infinite;filter:drop-shadow(0 0 20px rgba(212,175,55,0.6))}
+.setup h2{font-family:'Cinzel',serif;font-size:22px;color:var(--gold);text-shadow:0 0 20px rgba(212,175,55,0.4)}
+.setup p{font-size:14px;color:var(--text2);max-width:340px;line-height:1.7;font-style:italic}
+.setup-divider{font-family:'Cinzel',serif;color:var(--gold-dim);font-size:12px;letter-spacing:3px}
+
+/* ─── スマホ対応 ─── */
+@media(max-width:768px){.sb{display:none}.topbar{padding:12px 14px}.topbar-left h2{font-size:14px}.content{padding:12px 14px;gap:12px}.pc-name{font-size:17px}}
+@media(max-width:480px){.topbar-left h2{font-size:13px}.pc-name{font-size:16px}.pc-animal{width:60px;height:60px}}
+</style>
+</head>
+<body>
+
+<nav class="sb">
+  <div class="sb-logo">
+    <div class="sb-crest">🏰</div>
+    <h1>AGENT HOGWARTS</h1>
+    <p>powered by Claude Code</p>
+  </div>
+  <div class="nav">
+    <a class="active"><span class="nav-icon">⚡</span>運用ボード</a>
+    <a onclick="openGithub()"><span class="nav-icon">📜</span>GitHub Issue</a>
+    <a onclick="showSettings()"><span class="nav-icon">🔮</span>設定</a>
+  </div>
+  <div class="sb-bottom">
+    <div class="sb-quote" id="sb-quote">"It is our choices that show what we truly are."</div>
+    <div style="margin-top:8px;font-size:9px;color:var(--text3)" id="last-upd">未取得</div>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h2 id="top-title">🏰 全エージェント 稼働ボード</h2>
+      <p id="top-sub">The magic is in progress... agents are working in real time</p>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-s" onclick="fetchStatus()">✦ 更新</button>
+      <button class="btn btn-p" onclick="showSettings()">🔮 設定</button>
+    </div>
+  </div>
+
+  <div class="content" id="main-content">
+    <div class="setup" id="setup-screen">
+      <div class="setup-icon">🔑</div>
+      <h2>Hogwarts への入口</h2>
+      <p>GitHubトークンとリポジトリ名を設定すると、エージェントたちの魔法の活動がリアルタイムで現れます</p>
+      <div class="setup-divider">— ✦ —</div>
+      <button class="btn btn-p" style="font-size:14px;padding:12px 28px" onclick="showSettings()">🔮 設定を開く</button>
+    </div>
+
+    <div id="board" style="display:none">
+      <div class="status-bar waiting" id="sbar">
+        <div class="dot"></div>
+        <span id="sbar-text">魔法の状態を確認中...</span>
+      </div>
+
+      <div class="approval" id="approval">
+        <div class="approval-title">⏳ 呪文の承認をお願いします — 投稿案が完成しました</div>
+        <div class="post-text" id="post-text">（投稿案を読み込み中...）</div>
+        <div class="approval-row">
+          <button class="btn btn-ok" onclick="openApproval()">📜 GitHub Issue を開いて「承認」とコメント →</button>
+          <a href="#" onclick="copyPost();return false">📋 テキストをコピー</a>
+        </div>
+      </div>
+
+      <div class="section-title">⚡ エージェント魔法省 稼働状況</div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal">
+  <div class="modal">
+    <div class="modal-title">接続の呪文</div>
+    <div class="fg"><label>GitHub Personal Access Token</label><input type="password" id="inp-token" placeholder="ghp_xxxxxxxxxxxx"></div>
+    <div class="fg"><label>GitHub リポジトリ</label><input type="text" id="inp-repo" placeholder="your-username/your-repo-name"></div>
+    <div class="fg"><label>自動更新間隔（秒）</label><input type="number" id="inp-interval" value="30" min="10" max="300"></div>
+    <div class="modal-row">
+      <button class="btn btn-s" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-p" onclick="saveSettings()">✦ 保存して接続</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  寮の紋章画像パス（Wikimedia Commons SVG）
+// ══════════════════════════════════════════════
+// docs/images/ に保存済み: gryffindor.svg / slytherin.svg / ravenclaw.svg
+
+// ══════════════════════════════════════════════
+//  SVG 定義 — 役割アイコン（コーナー）
+// ══════════════════════════════════════════════
+const ROLE_SVG = {
+
+  // 虫眼鏡（ハーマイオニー：リサーチ）
+  hermione: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <circle cx="10" cy="10" r="6"/>
+    <line x1="14.5" y1="14.5" x2="21" y2="21"/>
+  </svg>`,
+
+  // 羽ペン（ルーナ：ライティング）
+  luna: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21,3 C14,4 5,11 3,22"/>
+    <path d="M21,3 C18,9 13,15 9,20"/>
+    <line x1="3" y1="22" x2="7" y2="18"/>
+  </svg>`,
+
+  // 文書チェック（マルフォイ：校閲）
+  malfoy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14,2 H6 C4.9,2 4,2.9 4,4 V20 C4,21.1 4.9,22 6,22 H18 C19.1,22 20,21.1 20,20 V8 L14,2Z"/>
+    <polyline points="14,2 14,8 20,8"/>
+    <polyline points="9,15 11,17 15,12"/>
+  </svg>`,
+
+  // 魔法薬瓶（スネイプ：監視）
+  snape: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="9" y1="2" x2="15" y2="2"/>
+    <path d="M10,2 L8,8 C5,13 4,18 7,20 C9,22 15,22 17,20 C20,18 19,13 16,8 L14,2"/>
+    <path d="M8.5,15 Q12,17 15.5,15"/>
+    <circle cx="14" cy="18" r="1.5" fill="currentColor" stroke="none"/>
+  </svg>`,
+
+  // 魔法の杖（あなた：承認）
+  human: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <line x1="4" y1="20" x2="17" y2="7"/>
+    <circle cx="18.5" cy="5.5" r="2.5" fill="currentColor" stroke="none"/>
+    <line x1="20" y1="2" x2="21" y2="1"/>
+    <line x1="22" y1="5" x2="23" y2="5"/>
+    <line x1="21" y1="3" x2="22" y2="2"/>
+  </svg>`,
+
+  // フクロウ（ロン：投稿）
+  ron_post: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4,14 C4,8 8,5 12,5 C16,5 20,8 20,14 C20,19 17,21 12,21 C7,21 4,19 4,14Z"/>
+    <line x1="9" y1="5" x2="7" y2="2"/>
+    <line x1="15" y1="5" x2="17" y2="2"/>
+    <circle cx="9" cy="13" r="2.5"/>
+    <circle cx="15" cy="13" r="2.5"/>
+    <circle cx="9"  cy="13" r="1" fill="currentColor"/>
+    <circle cx="15" cy="13" r="1" fill="currentColor"/>
+    <path d="M11,15 L12,17 L13,15"/>
+    <path d="M4,15 C3,17 3,19 5,19"/>
+    <path d="M20,15 C21,17 21,19 19,19"/>
+  </svg>`,
+
+  // 棒グラフ（ロン計測：計測）
+  ron_fetch: `<svg viewBox="0 0 24 24" fill="currentColor">
+    <rect x="2" y="2" width="2" height="17" rx="1"/>
+    <rect x="2" y="20" width="20" height="2" rx="1"/>
+    <rect x="6"  y="13" width="3.5" height="7" rx="0.5"/>
+    <rect x="11" y="8"  width="3.5" height="12" rx="0.5"/>
+    <rect x="16" y="5"  width="3.5" height="15" rx="0.5"/>
+  </svg>`,
+};
+
+// ══════════════════════════════════════════════
+//  エージェント定義
+// ══════════════════════════════════════════════
+const AGENTS = [
+  {key:"hermione",  name:"ハーマイオニー", role:"リサーチ・分析",  step:"①②", house:"gryffindor",
+   desc:"YouTubeとAIニュースを収集し、Geminiで最適な投稿の角度を導き出します"},
+  {key:"luna",      name:"ルーナ",         role:"ライティング",    step:"③",   house:"ravenclaw",
+   desc:"3案（直球・共感・挑発型）を出木杉キャラの語尾・リズムで生成します"},
+  {key:"malfoy",    name:"マルフォイ",     role:"校閲・品質管理",  step:"④",   house:"slytherin",
+   desc:"投稿案3案を厳格に審査し、最優秀案をオーナーへ提出します"},
+  {key:"snape",     name:"スネイプ",       role:"日次監視官",      step:"監視", house:"slytherin",
+   desc:"3パスリフレクションで品質深層検証。パイプライン停滞・エラーを30分おきに監視します"},
+  {key:"human",     name:"あなた",          role:"承認",            step:"⑤",   house:"gryffindor",
+   desc:"GitHub Issueに「承認」とコメントすると次のステップへ進みます"},
+  {key:"ron_post",  name:"ロン",           role:"投稿実行",        step:"⑥",   house:"gryffindor",
+   desc:"承認された投稿案をThreads APIで投稿します"},
+  {key:"ron_fetch", name:"ロン（計測）",   role:"計測・分析・保管",      step:"⑦",   house:"gryffindor",
+   desc:"22時に自動計測。いいね/閲覧数/ERでパフォーマンス判定し、フォロワー貢献度を按分。バズ投稿はナレッジに自動保管します"},
+];
+
+const QUOTES = [
+  '"It is our choices that show what we truly are."',
+  '"Words are our most inexhaustible source of magic."',
+  '"Happiness can be found even in the darkest of times."',
+  '"It matters not what someone is born, but what they grow to be."',
+  '"After all this time? Always."',
+  '"We\'ve all got both light and dark inside us."',
+];
+
+const SL = {
+  waiting:{text:"待機中",   css:"waiting",icon:"🔒"},
+  running:{text:"実行中",   css:"running",icon:"⚡"},
+  done:   {text:"完了",     css:"done",   icon:"✅"},
+  pending:{text:"承認待ち", css:"pending",icon:"⏳"},
+  skipped:{text:"スキップ", css:"waiting",icon:"⏭️"},
+  error:  {text:"エラー",   css:"error",  icon:"❌"},
+};
+
+const RUNE_CHARS   = ["✡","⬡","❋","✤","⊕","❂"];
+const MAGIC_STARS  = ["✨","⭐","💫","✦","🌟","⚡","✵","★"];
+
+let cfg={},issue=null,statuses={},postText="",timer=null;
+
+// エージェント表示名（agent_names.json から動的ロード。デフォルトはホグワーツ名）
+let agentNames={
+  harry:"ハリー", hermione:"ハーマイオニー", luna:"ルーナ",
+  malfoy:"マルフォイ", ron:"ロン", snape:"スネイプ"
+};
+let systemName="エージェントホグワーツ";
+
+// エージェントキー → 表示名の変換（ron_post/ron_fetch はどちらも ron キーを参照）
+function getAgentDisplayName(a){
+  if(a.key==="ron_post") return agentNames.ron||a.name;
+  if(a.key==="ron_fetch") return (agentNames.ron||"ロン")+"（計測）";
+  if(a.key==="human") return a.name;  // "あなた" は変更しない
+  return agentNames[a.key]||a.name;
+}
+
+async function loadAgentNames(){
+  if(!cfg.token||!cfg.repo)return;
+  try{
+    const r=await fetch(
+      `https://api.github.com/repos/${cfg.repo}/contents/operation/config/agent_names.json`,
+      {headers:{Authorization:`token ${cfg.token}`,Accept:"application/vnd.github.v3+json"}}
+    );
+    if(!r.ok)return;
+    const data=await r.json();
+    const decoded=JSON.parse(atob(data.content.replace(/\n/g,"")));
+    Object.assign(agentNames,Object.fromEntries(
+      Object.entries(decoded).filter(([k])=>!k.startsWith("_"))
+    ));
+    if(decoded.system_name){
+      systemName=decoded.system_name;
+      document.title="🏰 "+systemName;
+    }
+  }catch(e){console.warn("agent_names.json 読み込みスキップ:",e.message);}
+}
+
+function loadCfg(){const s=localStorage.getItem("hog_cfg");if(s)cfg=JSON.parse(s);return !!(cfg.token&&cfg.repo)}
+function saveSettings(){
+  cfg.token=document.getElementById("inp-token").value.trim();
+  cfg.repo=document.getElementById("inp-repo").value.trim();
+  cfg.interval=parseInt(document.getElementById("inp-interval").value)||30;
+  localStorage.setItem("hog_cfg",JSON.stringify(cfg));closeModal();init();
+}
+function showSettings(){
+  document.getElementById("inp-token").value=cfg.token||"";
+  document.getElementById("inp-repo").value=cfg.repo||"";
+  document.getElementById("inp-interval").value=cfg.interval||30;
+  document.getElementById("modal").classList.add("open");
+}
+function closeModal(){document.getElementById("modal").classList.remove("open")}
+
+function init(){
+  document.getElementById("sb-quote").textContent=QUOTES[Math.floor(Math.random()*QUOTES.length)];
+  if(!loadCfg()||!cfg.token||!cfg.repo){
+    document.getElementById("setup-screen").style.display="flex";
+    document.getElementById("board").style.display="none";return;
+  }
+  document.getElementById("setup-screen").style.display="none";
+  document.getElementById("board").style.display="block";
+  renderGrid();fetchStatus();
+  if(timer)clearInterval(timer);
+  timer=setInterval(fetchStatus,(cfg.interval||30)*1000);
+}
+
+// ── グリッド描画（SVGカード） ──────────────────────────
+function renderGrid(sts={}){
+  const g=document.getElementById("grid");
+  g.innerHTML="";
+  AGENTS.forEach(a=>{
+    const st=sts[a.key]||{status:"waiting",time:"-",preview:"",activity:""};
+    const sl=SL[st.status]||SL.waiting;
+    const isRun=st.status==="running";
+    const roleSvg=ROLE_SVG[a.key]||"";
+
+    const div=document.createElement("div");
+    div.className=`card ${sl.css}`;
+    div.dataset.house=a.house||"";
+    div.setAttribute("onclick","castSpell(this)");
+    div.innerHTML=`
+      ${isRun?'<span class="sparkle">✨</span><span class="sparkle">⭐</span><span class="sparkle">✦</span>':""}
+      <div class="pc-corner pc-tl">
+        <div class="pc-step">${a.step}</div>
+        <div class="pc-corner-icon">${roleSvg}</div>
+      </div>
+      <div class="pc-center">
+        <div class="pc-animal">
+          <img src="images/${a.house}.svg" alt="${a.house} crest" class="${isRun?"floating":""}" loading="lazy">
+        </div>
+        <div class="pc-name">${getAgentDisplayName(a)}</div>
+        <div class="pc-role">${a.role}</div>
+        <div class="pc-badge-wrap">
+          <span class="badge ${sl.css}">
+            ${isRun?'<span class="spin"></span> ':sl.icon+" "}${sl.text}
+          </span>
+        </div>
+      </div>
+      <div class="pc-desc">${st.preview||a.desc}</div>
+      ${st.activity?`<div class="pc-activity">${st.activity}</div>`:""}
+      ${a.key==="snape"&&st.score!==undefined?`<div class="pc-score">✦ 品質スコア ${st.score}/100</div>`:""}
+      ${st.time&&st.time!=="-"?`<div class="card-time">${st.time}</div>`:""}
+      <div class="pc-corner pc-br">
+        <div class="pc-step">${a.step}</div>
+        <div class="pc-corner-icon">${roleSvg}</div>
+      </div>
+    `;
+    g.appendChild(div);
+  });
+}
+
+// ── ✨ 魔法クリックアニメーション ─────────────────────
+function castSpell(card){
+  if(card.classList.contains("casting"))return;
+  card.classList.add("casting");
+  const overlay=document.createElement("div");
+  overlay.className="magic-overlay";
+  const flash=document.createElement("div");flash.className="magic-flash";overlay.appendChild(flash);
+  const rune=document.createElement("div");
+  rune.className="magic-rune";
+  rune.textContent=RUNE_CHARS[Math.floor(Math.random()*RUNE_CHARS.length)];
+  overlay.appendChild(rune);
+  const n=8;
+  for(let i=0;i<n*2;i++){
+    const s=document.createElement("span");
+    s.className="magic-star";
+    s.textContent=MAGIC_STARS[Math.floor(Math.random()*MAGIC_STARS.length)];
+    s.style.setProperty("--a",`${i*(360/(n*2))}deg`);
+    s.style.animationDelay=`${i*0.03}s`;
+    overlay.appendChild(s);
+  }
+  card.appendChild(overlay);
+  setTimeout(()=>{card.classList.remove("casting");overlay.remove();},950);
+}
+
+// ── GitHub API ─────────────────────────────────────────
+async function fetchStatus(){
+  if(!cfg.token||!cfg.repo)return;
+  await loadAgentNames();
+  try{
+    const today=new Date().toLocaleDateString("sv-SE");
+    const r=await fetch(
+      `https://api.github.com/repos/${cfg.repo}/issues?labels=daily-operation&state=open&per_page=10`,
+      {headers:{Authorization:`token ${cfg.token}`,Accept:"application/vnd.github.v3+json"}}
+    );
+    if(!r.ok){showBar("error",`API エラー ${r.status} — 設定を確認してください`);return;}
+    const issues=await r.json();
+    issue=issues.find(i=>i.title.includes(today))||null;
+    if(!issue){
+      showBar("waiting",`本日（${today}）の運用はまだ始まっていません。7:00 JSTに魔法が発動します`);
+      renderGrid({});document.getElementById("approval").classList.remove("show");tick();return;
+    }
+    const sts=parseStatus(issue.body||"");
+    const cr=await fetch(
+      `https://api.github.com/repos/${cfg.repo}/issues/${issue.number}/comments`,
+      {headers:{Authorization:`token ${cfg.token}`}}
+    );
+    enrichFromComments(sts,await cr.json());
+    statuses=sts;renderGrid(sts);updateBar(sts);updateApproval(sts);tick();
+  }catch(e){showBar("error",`取得エラー: ${e.message}`);console.error(e);}
+}
+
+function parseStatus(body){
+  const sts={};
+  // ステップ番号列（名前に依存しない）でエージェントを特定する
+  const stepKeyMap=[["①②","hermione"],["③","luna"],["④","malfoy"],["⑤","human"],["⑥","ron_post"],["⑦","ron_fetch"]];
+  const stMap={"待機中":"waiting","実行中":"running","完了":"done","承認待ち":"pending","スキップ":"skipped","エラー":"error","差し戻し":"rejected"};
+  for(const line of body.split("\n")){
+    if(!line.startsWith("|")||line.includes("---")||line.includes("ステップ"))continue;
+    const cols=line.split("|").map(c=>c.trim()).filter(Boolean);
+    if(cols.length<4)continue;
+    let key=null;
+    for(const[step,k]of stepKeyMap){if(cols[0].includes(step)){key=k;break;}}
+    if(!key)continue;
+    let st="waiting";
+    for(const[lbl,code]of Object.entries(stMap)){if(cols[2].includes(lbl)){st=code;break;}}
+    sts[key]={status:st,time:cols[3]||"-",preview:"",activity:""};
+  }
+  return sts;
+}
+
+function enrichFromComments(sts,comments){
+  postText="";
+  for(const c of comments){
+    const b=c.body||"";
+    const ts=new Date(c.created_at).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+    // agentNames を使って動的に検索文字列を構築（名前変更に対応）
+    const nm=agentNames;
+    if(b.includes(nm.hermione+"より")&&b.includes("ブリーフィング")){
+      const m=b.match(/推奨ネタ[:：]\s*(.{0,100})/);const angle=b.match(/角度[:：]\s*(.{0,80})/);
+      if(sts.hermione){sts.hermione.preview=m?`推奨ネタ: ${m[1]}`:"リサーチ完了";sts.hermione.activity=angle?`角度: ${angle[1]}`:"";if(sts.hermione.time==="-")sts.hermione.time=ts;}
+    }
+    if(b.includes(nm.luna+"より")&&(b.includes("投稿案3案")||b.includes("3時間帯投稿案"))){
+      const m=b.match(/【案A[^】]*】[\s\S]*?━+\n([\s\S]{0,120})\n━+/);
+      if(sts.luna){sts.luna.preview=m?`案A冒頭: ${m[1].slice(0,80).replace(/\n/g," ")}…`:"3案作成完了";sts.luna.activity="直球型・共感型・挑発型の3案を生成";if(sts.luna.time==="-")sts.luna.time=ts;}
+    }
+    if(b.includes(nm.malfoy+"より：承認申請")){
+      const code=b.match(/```\n([\s\S]*?)\n```/);if(code)postText=code[1].trim();
+      const recm=b.match(/推奨案[:：]\s*([ABC案]+)/);
+      if(sts.malfoy){sts.malfoy.preview=recm?`推奨: ${recm[1]} — 承認申請中`:"審査完了";sts.malfoy.activity=postText?postText.slice(0,60)+"…":"";if(sts.malfoy.time==="-")sts.malfoy.time=ts;}
+    }
+    if(b.includes(nm.snape+"より")){
+      const score=b.match(/総合スコア[:：]\s*(\d+)/);const verdict=b.match(/判定[:：]\s*(.{0,20})/);
+      const followerCount=b.match(/現在[:：]\s*([\d,]+)人/);
+      if(!sts.snape)sts.snape={status:"done",time:ts,preview:"",activity:""};
+      sts.snape.status="done";sts.snape.time=ts;sts.snape.score=score?parseInt(score[1]):undefined;
+      sts.snape.preview=verdict?`品質判定: ${verdict[1]}`:(followerCount?`👥 ${followerCount[1]}人`:"監視完了");
+      sts.snape.activity=score?`3パス検証 スコア: ${score[1]}点`:(followerCount?`フォロワー: ${followerCount[1]}人`:"パイプライン正常");
+    }
+    if(b.includes(nm.ron+"より：投稿完了")||b.includes(nm.ron+"より：下書き保存")){
+      const pid=b.match(/投稿ID[：:]\s*`(.+?)`/);
+      if(sts.ron_post){sts.ron_post.preview=b.includes("下書き")?"下書き保存完了":"Threads投稿成功";sts.ron_post.activity=pid?`投稿ID: ${pid[1]}`:"";if(sts.ron_post.time==="-")sts.ron_post.time=ts;}
+    }
+    if(b.includes(nm.ron+"より：計測")||b.includes("エンゲージメント")||b.includes("自動計測結果")){
+      const likes=b.match(/合計いいね[：:]\s*\*{0,2}(\d+)/);
+      const views=b.match(/合計閲覧[：:]\s*\*{0,2}(\d+)/);
+      const er=b.match(/平均エンゲージメント率[：:]\s*\*{0,2}([\d.]+)%/);
+      const follower=b.match(/フォロワー推移.*?([+\-]\d+人)/);
+      const knowledge=b.match(/ナレッジ保管[：:]\s*(\d+)件/);
+      const buzz=b.match(/(🔥 大バズ|✅ 好調)/);
+      if(sts.ron_fetch){
+        let previewParts=[];
+        if(likes)previewParts.push(`❤️${likes[1]}`);
+        if(views)previewParts.push(`👁${views[1]}`);
+        if(er)previewParts.push(`ER${er[1]}%`);
+        sts.ron_fetch.preview=previewParts.length?previewParts.join(" / "):(buzz?buzz[1]:"計測完了");
+        let actParts=[];
+        if(follower)actParts.push(`フォロワー${follower[1]}`);
+        if(knowledge&&parseInt(knowledge[1])>0)actParts.push(`📚ナレッジ${knowledge[1]}件保管`);
+        if(buzz)actParts.push(buzz[1]);
+        sts.ron_fetch.activity=actParts.join(" / ")||"エンゲージメントデータを記録";
+        if(sts.ron_fetch.time==="-")sts.ron_fetch.time=ts;
+      }
+    }
+  }
+}
+
+function updateBar(sts){
+  const vals=Object.values(sts);
+  const running=AGENTS.find(a=>sts[a.key]?.status==="running");
+  const hasErr=vals.some(s=>s.status==="error");
+  const hasPend=vals.some(s=>s.status==="pending");
+  const allDone=vals.length>0&&vals.every(s=>["done","skipped"].includes(s.status));
+  if(hasErr)   showBar("error",`❌ エラーが発生しています — GitHub Issueを確認してください`);
+  else if(running)showBar("running",`✨ ${running.name} が魔法を行使中です...`);
+  else if(hasPend)showBar("pending",`⏳ 承認の呪文を待っています — Issue #${issue.number} に「承認」とコメントを`);
+  else if(allDone)showBar("done",`🎉 本日の魔法が全て完成しました！ Issue #${issue.number}`);
+  else showBar("waiting",`🏰 Issue #${issue?.number||"?"} を監視中`);
+}
+function showBar(type,text){
+  const b=document.getElementById("sbar");b.className=`status-bar ${type}`;
+  document.getElementById("sbar-text").textContent=text;
+}
+function updateApproval(sts){
+  const box=document.getElementById("approval");
+  const isPend=Object.values(sts).some(s=>s.status==="pending");
+  if(isPend&&postText){box.classList.add("show");document.getElementById("post-text").textContent=postText;}
+  else box.classList.remove("show");
+}
+function openGithub() {window.open(`https://github.com/${cfg.repo}/issues`,"_blank")}
+function openApproval(){if(issue)window.open(issue.html_url,"_blank")}
+function copyPost()   {if(postText){navigator.clipboard.writeText(postText);alert("投稿テキストをコピーしました✨");}}
+function tick(){
+  const now=new Date().toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
+  document.getElementById("last-upd").textContent=`更新: ${now}`;
+}
+window.addEventListener("load",()=>{loadCfg();init();});
+</script>
+</body>
+</html>

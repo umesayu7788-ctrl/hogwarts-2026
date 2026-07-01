@@ -1,74 +1,59 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Dependencies
+node_modules/
+
+# Python virtual environment
 .venv/
 venv/
-ENV/
-env/
-.pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
-*.cover
-.hypothesis/
+__pycache__/
 
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.pnpm-store/
-.npm/
-.yarn/
-.pnp.*
-*.tsbuildinfo
-.next/
-.nuxt/
+# Build output
+build/
 dist/
-out/
-.cache/
-.parcel-cache/
-coverage/
-.nyc_output/
+.svelte-kit/
 
-# Environment and secrets
+# Environment variables
 .env
 .env.*
 !.env.example
-*.pem
-secrets/
 
-# IDE and OS
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
+# SQLite database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS files
 .DS_Store
 Thumbs.db
-desktop.ini
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
 
 # Logs
-*.log
 logs/
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+
+# Temporary files
+tmp/
+temp/
+
+# Google サービスアカウントキー（絶対にコミットしない）
+credentials/
+
+# Claude Code ローカル設定（個人情報含む可能性あり）
+.claude/settings.local.json
+
+# トークンリフレッシュ一時ファイル（絶対にコミットしない）
+new_token.txt
+
+# 秘密鍵・証明書ファイル
+*.pem
+*.key
+*.p12
