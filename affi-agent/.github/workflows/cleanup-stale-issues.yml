@@ -1,0 +1,82 @@
+name: Cleanup Stale Daily-Operation Issues
+
+# 毎日 23:45 JST に、未承認のまま48時間以上経過した daily-operation Issue を自動クローズ
+# 本日のIssueが未承認のまま12時間経過したらDiscord通知
+
+on:
+  schedule:
+    - cron: '45 14 * * *'   # 23:45 JST
+    - cron: '15 15 * * *'   # 00:15 JST（予備）
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Close stale unapproved issues (>48h)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          # 48時間以前に作成され、未承認のIssueを取得
+          THRESHOLD=$(date -u -d "48 hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          STALE_ISSUES=$(gh api "repos/${{ github.repository }}/issues?labels=daily-operation&state=open&per_page=50" \
+            --jq ".[] | select(.created_at < \"$THRESHOLD\") | \"\\(.number)|\\(.title)\"")
+
+          if [ -z "$STALE_ISSUES" ]; then
+            echo "✅ 48時間以上の未承認Issueなし"
+          else
+            echo "$STALE_ISSUES" | while IFS='|' read -r num title; do
+              [ -z "$num" ] && continue
+              echo "Closing #$num: $title"
+              gh issue close "$num" --comment "自動クリーンアップ：48時間経過により未承認のままクローズしました。" || echo "Failed to close #$num"
+            done
+          fi
+
+      - name: Remind if today's issue has been pending for 12h+
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          # 本日のIssueで、'投稿完了'コメントが無いものを検索
+          ISSUE_JSON=$(gh api "repos/${{ github.repository }}/issues?labels=daily-operation&state=open&per_page=10" \
+            --jq "[.[] | select(.title | contains(\"$TODAY\"))] | first")
+          if [ "$ISSUE_JSON" = "null" ] || [ -z "$ISSUE_JSON" ]; then
+            echo "本日のIssueなし（Issue未作成）"
+            exit 0
+          fi
+          ISSUE_NUM=$(echo "$ISSUE_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['number'])")
+          ISSUE_URL=$(echo "$ISSUE_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['html_url'])")
+
+          # 投稿完了コメントがあるか確認
+          POSTED=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
+            --jq ".[] | select(.body | contains(\"投稿完了\")) | .id" | head -1)
+          if [ -n "$POSTED" ]; then
+            echo "本日のIssue #$ISSUE_NUM は投稿完了済み"
+            exit 0
+          fi
+
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "$(cat <<JSON
+          {
+            "username": "🔔 リマインダー",
+            "content": "@here ⏰ **Issue #$ISSUE_NUM ($TODAY) がまだ投稿されていません**",
+            "embeds": [{
+              "title": "承認待ちリマインダー",
+              "description": "23時を過ぎても投稿が完了していません。Issueを確認してください：$ISSUE_URL",
+              "color": 16089388
+            }]
+          }
+          JSON
+          )"
+            echo "Discord リマインダー送信: Issue #$ISSUE_NUM"
+          fi

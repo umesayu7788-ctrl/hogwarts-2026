@@ -1,0 +1,48 @@
+name: Weekly Monitor Monitoring Report
+
+on:
+  schedule:
+    # 毎週月曜日 AM 6:00 JST (日曜 UTC 21:00) に起動
+    - cron: '0 21 * * 0'    # 月曜06:00 JST（メイン）
+    - cron: '0 22 * * 0'    # 月曜07:00 JST（予備1）
+    - cron: '0 23 * * 0'    # 月曜08:00 JST（予備2）
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: write
+
+jobs:
+  monitor-weekly-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd scripts
+          pip install -r requirements.txt
+
+      - name: Monitor - Generate Weekly Report
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          python scripts/monitor_report.py
+
+      - name: Commit Monitor report to repository
+        run: |
+          git config --local user.email "monitor@affiliate-agents.bot"
+          git config --local user.name "Monitor (Agent)"
+          git add operation/weekly/
+          git diff --staged --quiet || git commit -m "📊 Snape週次レポート: $(date '+%Y年W%V')"
+          git push

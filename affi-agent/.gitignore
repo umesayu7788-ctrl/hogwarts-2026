@@ -58,8 +58,6 @@ new_token.txt
 *.key
 *.p12
 
-# Nested project clone (contains separate .git and secrets)
-hogwarts-2026/
-
-# Distribution archives
-*.zip
+# Claude Code runtime files
+.claude/scheduled_tasks.lock
+.claude/settings.local.json

@@ -1,0 +1,104 @@
+name: 月次トークン自動Discord配布
+
+# 毎月1日 09:00 JST に新トークンを生成して Discord に投稿する
+# トークン生成は scripts/utils/auth_check.py の generate_token() と同一アルゴリズム
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'    # 毎月1日 00:00 UTC = 09:00 JST
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  issue-token:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate token
+        id: gen
+        run: |
+          # 当月の年月を JST で取得
+          YEAR=$(TZ=Asia/Tokyo date +%Y)
+          MONTH=$(TZ=Asia/Tokyo date +%m)
+          MONTH_INT=$(TZ=Asia/Tokyo date +%-m)
+
+          # 翌月末日を計算
+          NEXT_MONTH=$((MONTH_INT + 1))
+          NEXT_YEAR=$YEAR
+          if [ $NEXT_MONTH -gt 12 ]; then
+            NEXT_MONTH=1
+            NEXT_YEAR=$((YEAR + 1))
+          fi
+          # 翌々月の1日 - 1日 = 翌月末
+          FOLLOWING_MONTH=$((NEXT_MONTH + 1))
+          FOLLOWING_YEAR=$NEXT_YEAR
+          if [ $FOLLOWING_MONTH -gt 12 ]; then
+            FOLLOWING_MONTH=1
+            FOLLOWING_YEAR=$((NEXT_YEAR + 1))
+          fi
+          VALID_UNTIL=$(date -d "$FOLLOWING_YEAR-$FOLLOWING_MONTH-01 -1 day" +%Y-%m-%d)
+
+          # 現在の KB の sys_ver を読み取り、pack_ref として使用する
+          KB_SYS_VER=$(grep -oP 'sys_ver:\s*\K[A-Z0-9\-]+' operation/knowledge/kb_sys_ref_v001.md 2>/dev/null | head -1)
+
+          if [ -z "$KB_SYS_VER" ]; then
+            echo "ERROR: kb_sys_ref_v001.md から sys_ver を読み取れませんでした"
+            exit 1
+          fi
+          echo "KB sys_ver (pack_ref): $KB_SYS_VER"
+
+          # トークン生成
+          TOKEN=$(python3 -c "import sys; sys.path.insert(0,'scripts'); from utils.auth_check import generate_token; print(generate_token($YEAR,$MONTH_INT))" 2>/dev/null)
+
+          if [ -z "$TOKEN" ]; then
+            echo "Token generation failed"
+            exit 1
+          fi
+
+          # .key ファイルを作成（pack_ref は KB の sys_ver に合わせる）
+          KEY_FILE="access_AFFI-${YEAR}-${MONTH}.key"
+          printf '%s\nvalid_until: %s\nissued_by: affi-agent\nmember_tier: standard\npack_ref: %s\n' \
+            "$TOKEN" "$VALID_UNTIL" "$KB_SYS_VER" > "$KEY_FILE"
+
+          echo "key_file=$KEY_FILE" >> $GITHUB_OUTPUT
+          echo "valid_until=$VALID_UNTIL" >> $GITHUB_OUTPUT
+          echo "year_month=${YEAR}-${MONTH}" >> $GITHUB_OUTPUT
+          echo "Generated: $KEY_FILE (valid until $VALID_UNTIL)"
+
+      - name: Post to Discord with .key file attachment
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK_URL is not set. Skipping Discord post."
+            exit 0
+          fi
+
+          KEY_FILE="${{ steps.gen.outputs.key_file }}"
+          VALID_UNTIL="${{ steps.gen.outputs.valid_until }}"
+          YM="${{ steps.gen.outputs.year_month }}"
+
+          # jq で JSON を安全に構築（日本語・改行の escaping を自動処理）
+          PAYLOAD=$(jq -n \
+            --arg ym "$YM" \
+            --arg valid "$VALID_UNTIL" \
+            '{
+              username: "AFFI Token Bot",
+              content: ("🗝️ **" + $ym + " のアクセストークンを配布します**\n\n有効期限: " + $valid + "\n\n👇 添付の `.key` ファイルをダウンロードして\n`operation/auth/` フォルダに配置してください。\n配置後、Claude Code で「更新」と入力してください。")
+            }')
+
+          # Discord にファイル添付で直接投稿
+          curl -s -X POST "$WEBHOOK" \
+            -F "payload_json=$PAYLOAD" \
+            -F "file=@${KEY_FILE}"
+
+          echo "Discord post with .key file attachment sent successfully."

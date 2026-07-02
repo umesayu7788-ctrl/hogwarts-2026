@@ -1,0 +1,107 @@
+name: Scheduled Post SLOT_3 (22:00 JST)
+
+# GitHub Actions cron は 60-120分遅延が常態化しているため、
+# 早めにcronを仕込み、時間窓を広く取り、複数crondで冗長化する。
+on:
+  schedule:
+    - cron: '30 11 * * *'   # 20:30 JST（最早・遅延吸収）
+    - cron: '0 12 * * *'    # 21:00 JST
+    - cron: '20 12 * * *'   # 21:20 JST
+    - cron: '40 12 * * *'   # 21:40 JST
+    - cron: '0 13 * * *'    # 22:00 JST（理想時刻）
+    - cron: '20 13 * * *'   # 22:20 JST（予備）
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  post-slot3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r scripts/requirements.txt
+
+      - name: 🔐 在籍認証＋保護KB取得（U2・二重判定）
+        env:
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+        run: |
+          set -e
+          echo "$DISCORD_USER_ID" > auth_member.txt
+          if [ -n "$DISCORD_USER_ID" ] && node lm-fetch.js --check ; then
+            echo "U2: Discord在籍を確認。保護KBをKVから更新（取得失敗時はローカル温存）"
+            while IFS= read -r d; do
+              [ -z "$d" ] && continue
+              case "$d" in \#*) continue;; esac
+              if node lm-fetch.js "$d" > "operation/knowledge/$d.tmp" 2>/dev/null && [ -s "operation/knowledge/$d.tmp" ]; then
+                mv "operation/knowledge/$d.tmp" "operation/knowledge/$d"
+              else
+                rm -f "operation/knowledge/$d.tmp"
+              fi
+            done < affili_kb_list.txt
+          else
+            echo "U2未確認 → 旧月次トークンで判定（移行期の二重判定）"
+            python scripts/utils/auth_check.py
+          fi
+
+      - name: Check execution time window (JST 21:30-23:30のみ許可・cron遅延吸収)
+        id: time_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          JST_HOUR=$(TZ=Asia/Tokyo date +%H)
+          JST_MIN=$(TZ=Asia/Tokyo date +%M)
+          CURRENT=$((10#$JST_HOUR * 60 + 10#$JST_MIN))
+          # GitHub Actions cron 1〜2時間遅延を吸収する設計：
+          # - cronは20:30から複数仕込み、遅延しても窓内に着地する
+          # - 窓は21:30以降を許可（早すぎる投稿はSKIP→次のcronに譲る）
+          WINDOW_START=$((21 * 60 + 30))   # 21:30（最早投稿許容）
+          WINDOW_END=$((23 * 60 + 30))     # 23:30（最遅投稿許容・拡大）
+          MAX_LATE=$((23 * 60 + 59))       # 23:59（workflow_dispatch許容上限）
+
+          if [ "${{ github.event_name }}" = "schedule" ] && ([ "$CURRENT" -lt "$WINDOW_START" ] || [ "$CURRENT" -gt "$WINDOW_END" ]); then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Current JST time (${JST_HOUR}:${JST_MIN}) is outside 21:30-23:30 window. Skipping."
+            exit 0
+          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && ([ "$CURRENT" -lt "$WINDOW_START" ] || [ "$CURRENT" -gt "$MAX_LATE" ]); then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Manual dispatch at ${JST_HOUR}:${JST_MIN} is outside safe window (21:30-23:59). Skipping."
+            exit 0
+          fi
+
+          # 冪等性チェック：本日のIssueにSLOT_3投稿完了コメントがあれば重複防止
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          ISSUE_NUM=$(gh api "repos/${{ github.repository }}/issues?labels=daily-operation&state=all&per_page=10" --jq ".[] | select(.title | contains(\"$TODAY\")) | .number" 2>/dev/null | head -1)
+          if [ -n "$ISSUE_NUM" ]; then
+            ALREADY=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" --jq ".[] | select(.body | contains(\"SLOT_3\") and contains(\"投稿完了\")) | .id" 2>/dev/null | head -1)
+            if [ -n "$ALREADY" ]; then
+              echo "skip=true" >> $GITHUB_OUTPUT
+              echo "⚠️ SLOT_3 already posted today. Skipping duplicate."
+              exit 0
+            fi
+          fi
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      - name: Post SLOT_3
+        if: steps.time_check.outputs.skip != 'true'
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
+            mkdir -p credentials
+            echo "$GOOGLE_CREDENTIALS_JSON" > credentials/sheets_service_account.json
+            export GOOGLE_CREDENTIALS_PATH=credentials/sheets_service_account.json
+          fi
+          python scripts/scheduled_post.py --slot 3

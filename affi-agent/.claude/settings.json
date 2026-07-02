@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(scripts/**)",
+      "Read(.github/**)",
+      "Read(docs/**)",
+
+      "Edit(CLAUDE.md)",
+      "Edit(.claude/settings.json)",
+      "Edit(SYS_VER_LOCK.md)",
+      "Edit(scripts/utils/auth_check.py)",
+      "Edit(.github/**)",
+      "Edit(operation/auth/**)",
+      "Edit(operation/knowledge/kb_sys_ref_v001.md)",
+      "Edit(operation/knowledge/affiliate_persuasion_psychology.md)",
+      "Edit(operation/knowledge/rakuten_affiliate_rules.md)",
+      "Edit(operation/knowledge/six_education_framework.md)",
+
+      "Write(CLAUDE.md)",
+      "Write(.claude/settings.json)",
+      "Write(SYS_VER_LOCK.md)",
+      "Write(scripts/utils/auth_check.py)",
+      "Write(.github/**)",
+      "Write(operation/auth/**)",
+      "Write(operation/knowledge/kb_sys_ref_v001.md)",
+      "Write(operation/knowledge/affiliate_persuasion_psychology.md)",
+      "Write(operation/knowledge/rakuten_affiliate_rules.md)",
+      "Write(operation/knowledge/six_education_framework.md)"
+    ]
+  }
+}

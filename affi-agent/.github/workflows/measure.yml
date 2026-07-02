@@ -1,0 +1,73 @@
+name: Measure Post Engagement (Poster Step 6)
+
+on:
+  workflow_dispatch:
+    inputs:
+      post_id:
+        description: 'Threads Post ID to measure'
+        required: true
+      issue_number:
+        description: 'GitHub Issue number for this post'
+        required: true
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  measure-engagement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd scripts
+          pip install -r requirements.txt
+
+      - name: 🔐 在籍認証＋保護KB取得（U2・二重判定）
+        env:
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+        run: |
+          set -e
+          echo "$DISCORD_USER_ID" > auth_member.txt
+          if [ -n "$DISCORD_USER_ID" ] && node lm-fetch.js --check ; then
+            echo "U2: Discord在籍を確認。保護KBをKVから更新（取得失敗時はローカル温存）"
+            while IFS= read -r d; do
+              [ -z "$d" ] && continue
+              case "$d" in \#*) continue;; esac
+              if node lm-fetch.js "$d" > "operation/knowledge/$d.tmp" 2>/dev/null && [ -s "operation/knowledge/$d.tmp" ]; then
+                mv "operation/knowledge/$d.tmp" "operation/knowledge/$d"
+              else
+                rm -f "operation/knowledge/$d.tmp"
+              fi
+            done < affili_kb_list.txt
+          else
+            echo "U2未確認 → 旧月次トークンで判定（移行期の二重判定）"
+            python scripts/utils/auth_check.py
+          fi
+
+      - name: Step 6 - Poster Fetches Engagement Data
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
+            mkdir -p credentials
+            echo "$GOOGLE_CREDENTIALS_JSON" > credentials/sheets_service_account.json
+            export GOOGLE_CREDENTIALS_PATH=credentials/sheets_service_account.json
+          fi
+          python scripts/fetch_engagement.py \
+            --post-id "${{ github.event.inputs.post_id }}" \
+            --issue-number "${{ github.event.inputs.issue_number }}"

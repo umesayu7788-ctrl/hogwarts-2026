@@ -1,0 +1,5 @@
+{
+  "endpoint_url": "https://kit-auth.8stn-y1010.workers.dev/",
+  "kit": "affili",
+  "_note": "endpoint_url と kit は運営が配布前に記入（全員共通でOK）。利用者は変更しないでください。DiscordユーザーIDは auth_member.txt に保存（GitHub Actions は repo Secret DISCORD_USER_ID から展開）。"
+}

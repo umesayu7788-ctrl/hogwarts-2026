@@ -1001,3 +1001,16 @@ A：コミュニティの管理者からDiscordまたはポータルサイト経
 
 **Q：わからないことがあったら？**
 A：コミュニティのDiscordで質問してください。
+
+---
+
+## Hogwarts Setup Session（@chou_detox_mama）
+
+### Persona Setup
+- [x] Step 1–7: ペルソナ確定（看護師ママ・腸活×心のデトックス）
+- [x] `affi-agent/operation/knowledge/buzz_posts.md` にペルソナ情報を書き込み済み
+- [x] `affi-agent/operation/config/genre_config.yaml` のキーワード設定
+- [x] アカウント名: @chou_detox_mama
+
+### Pending (Later)
+- [ ] Threads API real token setup — replace `THREADS_API_TOKEN` placeholder with production value

@@ -1,0 +1,204 @@
+name: Affiliate Daily Cycle
+
+# アフィリエイトチーム専用の日次サイクル
+# 既存のdaily-cycle.ymlと並行ではなく、アフィリ運用時はこちらを使用
+
+on:
+  schedule:
+    - cron: '37 20 * * *'   # 05:37 JST（メイン）
+    - cron: '26 21 * * *'   # 06:26 JST（予備1）
+    - cron: '51 22 * * *'   # 07:51 JST（予備2）
+  workflow_dispatch:
+    inputs:
+      post_type:
+        description: '投稿タイプ (auto / education / interest / affiliate)'
+        required: false
+        default: 'auto'
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  affiliate-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: 🔐 在籍認証＋保護KB取得（U2・二重判定）
+        env:
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+        run: |
+          set -e
+          echo "$DISCORD_USER_ID" > auth_member.txt
+          if [ -n "$DISCORD_USER_ID" ] && node lm-fetch.js --check ; then
+            echo "U2: Discord在籍を確認。保護KBをKVから更新（取得失敗時はローカル温存）"
+            while IFS= read -r d; do
+              [ -z "$d" ] && continue
+              case "$d" in \#*) continue;; esac
+              if node lm-fetch.js "$d" > "operation/knowledge/$d.tmp" 2>/dev/null && [ -s "operation/knowledge/$d.tmp" ]; then
+                mv "operation/knowledge/$d.tmp" "operation/knowledge/$d"
+              else
+                rm -f "operation/knowledge/$d.tmp"
+              fi
+            done < affili_kb_list.txt
+          else
+            echo "U2未確認 → 旧月次トークンで判定（移行期の二重判定）"
+            python scripts/utils/auth_check.py
+          fi
+
+      - name: Check if today already started
+        id: skip_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          JST_HOUR=$(TZ=Asia/Tokyo date +%H)
+          # workflow_dispatch（手動起動）はリハーサル/再生成用途のため、全スキップ判定をbypass
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual dispatch → bypass all skip checks, force RUN"
+            echo "should_run=RUN" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # 12時以降は遅延実行とみなしスキップ（深夜/日中の誤起動防止）
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$JST_HOUR" -ge 12 ]; then
+            echo "should_run=SKIP" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Issueの存在ではなく「ライター生成済みか（=承認申請コメントあり）」で判定
+          # 監視・スネイプが先にIssueを作成しても、実コンテンツ未生成なら走らせる
+          ISSUE_NUM=$(gh api "repos/${{ github.repository }}/issues?labels=daily-operation&state=all&per_page=5" --jq ".[] | select(.title | contains(\"$TODAY\")) | .number" 2>/dev/null | head -1)
+          if [ -z "$ISSUE_NUM" ]; then
+            echo "No issue for $TODAY → run"
+            echo "should_run=RUN" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # 承認申請コメント（=ライター→校閲完了）があるかチェック
+          HAS_REVIEW=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" --jq ".[] | select(.body | contains(\"校閲より：承認申請\")) | .id" 2>/dev/null | head -1)
+          if [ -n "$HAS_REVIEW" ]; then
+            echo "Issue #$ISSUE_NUM already has review approval comment → SKIP"
+            echo "should_run=SKIP" >> "$GITHUB_OUTPUT"
+          else
+            echo "Issue #$ISSUE_NUM exists but no review yet (likely Monitor only) → RUN"
+            echo "should_run=RUN" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Step A: 商品リサーチ（アフィリ投稿日のみ実行想定） ──
+      - name: Step A - Product Research
+        if: steps.skip_check.outputs.should_run != 'SKIP'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          cd scripts
+          python product_researcher.py --mode parenting || echo "product_researcher skipped"
+
+      # ── Step B: 口コミ分析 ──
+      - name: Step B - Review Analysis
+        if: steps.skip_check.outputs.should_run != 'SKIP'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          cd scripts
+          python review_analyzer.py || echo "review_analyzer skipped (no products)"
+
+      # ── Step 1-2: 情報リサーチ（既存フロー） ──
+      - name: Step 1-2 - InfoResearcher Research
+        if: steps.skip_check.outputs.should_run != 'SKIP'
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: cd scripts && python info_research.py
+
+      # ── Step 2.5: 曜日ベースで投稿タイプを決定（アフィリ頻度制御） ──
+      - name: Decide post type based on weekday
+        if: steps.skip_check.outputs.should_run != 'SKIP'
+        id: post_type
+        run: |
+          # 曜日ごとの既定：火(2)/金(5)/土(6)がアフィリ。それ以外は education or interest
+          # workflow_dispatch で明示指定された場合はそれを優先
+          JST_DOW=$(TZ=Asia/Tokyo date +%u)   # 月=1..日=7
+          MANUAL="${{ github.event.inputs.post_type }}"
+          if [ -n "$MANUAL" ] && [ "$MANUAL" != "auto" ]; then
+            TYPE="$MANUAL"
+          elif [ "$JST_DOW" = "2" ] || [ "$JST_DOW" = "5" ] || [ "$JST_DOW" = "6" ]; then
+            TYPE="affiliate"
+          elif [ "$JST_DOW" = "1" ] || [ "$JST_DOW" = "4" ]; then
+            TYPE="education"
+          else
+            TYPE="interest"
+          fi
+          echo "Today DOW=$JST_DOW → post_type=$TYPE"
+          echo "type=$TYPE" >> $GITHUB_OUTPUT
+
+      # ── Step 3-4: ライター → コンプライアンス → 校閲 ──
+      - name: Step 3-4 - Writer, Compliance, Reviewer
+        if: steps.skip_check.outputs.should_run != 'SKIP'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          POST_TYPE: ${{ steps.post_type.outputs.type }}
+        run: |
+          cd scripts
+          MAX_RETRY=2
+          attempt=0
+          while [ $attempt -le $MAX_RETRY ]; do
+            echo "=== Writer write attempt $((attempt+1)) (post_type=$POST_TYPE) ==="
+            python writer.py --post-type "$POST_TYPE"
+
+            echo "=== Compliance check ==="
+            # コンプライアンス審査は投稿本文を入力として実行（簡易呼び出し）
+            python compliance_officer.py --text "$(cat /tmp/writer_post.txt 2>/dev/null || echo '')" --affiliate || echo "compliance warning"
+
+            echo "=== Reviewer review attempt $((attempt+1)) ==="
+            set +e
+            python content_review.py
+            exit_code=$?
+            set -e
+            if [ $exit_code -eq 0 ]; then
+              echo "Approved"
+              break
+            elif [ $exit_code -eq 10 ]; then
+              attempt=$((attempt+1))
+              if [ $attempt -gt $MAX_RETRY ]; then
+                echo "Max retries reached. Notifying Discord."
+                if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+                  curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"username\":\"🚨 校閲\",\"content\":\"@here ⚠️ **本日のライター→校閲ループがMAX_RETRY到達で全案差し戻し**\",\"embeds\":[{\"title\":\"手動介入が必要\",\"description\":\"本日の投稿案は生成されましたが品質基準を満たしませんでした。Issueを確認してください。\",\"color\":15744288}]}" || echo "Discord notify failed"
+                fi
+                exit 0
+              fi
+              sleep 30
+            else
+              # ライター or 校閲が想定外で失敗
+              if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+                curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"username\":\"🚨 パイプライン\",\"content\":\"@here ⚠️ **Writer/Reviewer 異常終了 (exit=$exit_code)**\",\"embeds\":[{\"title\":\"手動介入が必要\",\"description\":\"本日の投稿生成でエラー。Actions ログを確認してください。\",\"color\":15744288}]}" || echo "Discord notify failed"
+              fi
+              exit $exit_code
+            fi
+          done

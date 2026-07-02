@@ -1,0 +1,67 @@
+name: Weekly Funnel Planning
+
+# 毎週月曜 5:30 JST（= UTC 日 20:30）にファネル設計担当を自動実行
+# 週次の投稿計画（教育:興味付け:アフィリ=5:3:1 ベース）を operation/weekly/ に生成
+
+on:
+  schedule:
+    - cron: '30 20 * * 0'   # 月曜 05:30 JST（予備1）
+    - cron: '30 21 * * 0'   # 月曜 06:30 JST（予備2）
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: write
+
+jobs:
+  funnel-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r scripts/requirements.txt
+
+      - name: 🔐 在籍認証＋保護KB取得（U2・二重判定）
+        env:
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+        run: |
+          set -e
+          echo "$DISCORD_USER_ID" > auth_member.txt
+          if [ -n "$DISCORD_USER_ID" ] && node lm-fetch.js --check ; then
+            echo "U2: Discord在籍を確認。保護KBをKVから更新（取得失敗時はローカル温存）"
+            while IFS= read -r d; do
+              [ -z "$d" ] && continue
+              case "$d" in \#*) continue;; esac
+              if node lm-fetch.js "$d" > "operation/knowledge/$d.tmp" 2>/dev/null && [ -s "operation/knowledge/$d.tmp" ]; then
+                mv "operation/knowledge/$d.tmp" "operation/knowledge/$d"
+              else
+                rm -f "operation/knowledge/$d.tmp"
+              fi
+            done < affili_kb_list.txt
+          else
+            echo "U2未確認 → 旧月次トークンで判定（移行期の二重判定）"
+            python scripts/utils/auth_check.py
+          fi
+
+      - name: Run Funnel Designer
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: cd scripts && python funnel_designer.py --init
+
+      - name: Commit weekly plan
+        run: |
+          git config --local user.email "funnel@affiliate-agents.bot"
+          git config --local user.name "Funnel Designer Bot"
+          git add operation/weekly/
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: weekly funnel plan auto-generated"
+            git push
+          else
+            echo "No funnel plan changes"
+          fi

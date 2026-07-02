@@ -1,0 +1,71 @@
+{
+  "name": "Affiliate Threads Agent",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "postCreateCommand": "pip install -r scripts/requirements.txt && npm install -g @anthropic-ai/claude-code",
+  "postStartCommand": "bash .devcontainer/setup-env.sh || true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "GitHub.vscode-github-actions",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "secrets": {
+    "GEMINI_API_KEY": {
+      "description": "Google Gemini API key"
+    },
+    "THREADS_ACCESS_TOKEN": {
+      "description": "Threads API access token"
+    },
+    "THREADS_USER_ID": {
+      "description": "Threads user ID"
+    },
+    "YOUTUBE_API_KEY": {
+      "description": "YouTube Data API v3 key"
+    },
+    "RAKUTEN_APP_ID": {
+      "description": "Rakuten WebService application ID"
+    },
+    "RAKUTEN_AFFILIATE_ID": {
+      "description": "Rakuten Affiliate ID"
+    },
+    "AMAZON_ACCESS_KEY": {
+      "description": "Amazon PA-API access key"
+    },
+    "AMAZON_SECRET_KEY": {
+      "description": "Amazon PA-API secret key"
+    },
+    "AMAZON_ASSOCIATE_TAG": {
+      "description": "Amazon associate tag"
+    },
+    "GOOGLE_CREDENTIALS_JSON": {
+      "description": "Google service account JSON (for Sheets)"
+    },
+    "SPREADSHEET_ID": {
+      "description": "Google Sheets spreadsheet ID"
+    },
+    "DISCORD_WEBHOOK_URL": {
+      "description": "Discord webhook URL for notifications"
+    },
+    "GITHUB_TOKEN": {
+      "description": "GitHub Personal Access Token (repo + workflow scope)"
+    }
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "4gb"
+  }
+}

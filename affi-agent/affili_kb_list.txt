@@ -1,0 +1,10 @@
+# アフィリ：KV化する「保護KB」＝settings.json で Edit/Write deny の核IPファイル。
+# Worker が在籍確認した時だけ返す。lm-kv-upload-kit.js / ワークフローのKB取得ループが参照。
+#
+# ★ここに入れてはいけないもの（顧客データ。KVで上書きすると顧客の中身が消える）:
+#   buzz_posts.md / own_buzz_history.md(auto_measure自動更新) /
+#   reference_buzz_patterns.md / affiliate_post_structure.md … 顧客が記入・蓄積するファイル
+# ※ kb_sys_ref_v001.md は旧auth(月次トークン/SYS_VER_LOCK)用なので、旧auth撤去フェーズで扱う。
+affiliate_persuasion_psychology.md
+rakuten_affiliate_rules.md
+six_education_framework.md

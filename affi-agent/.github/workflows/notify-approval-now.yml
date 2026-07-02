@@ -1,0 +1,31 @@
+name: Notify Approval Now (Manual)
+
+# 手動トリガー専用：今日のIssueの承認依頼をDiscordに送る
+# affiliate-cycleでDISCORD未通知の時の緊急用
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: read
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r scripts/requirements.txt
+
+      - name: Send Discord approval notification
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          cd scripts
+          python notify_approval.py

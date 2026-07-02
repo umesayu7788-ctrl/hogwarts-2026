@@ -1,0 +1,96 @@
+name: Approve and Post (SLOT_1)
+
+# GitHub Issueに「承認」とコメントすると即時投稿される
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  post:
+    if: |
+      contains(github.event.issue.labels.*.name, 'daily-operation') &&
+      contains(github.event.comment.body, '承認') &&
+      !contains(github.event.comment.body, '申請') &&
+      github.event.comment.user.type != 'Bot' &&
+      (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: 🔐 在籍認証＋保護KB取得（U2・二重判定）
+        env:
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+        run: |
+          set -e
+          echo "$DISCORD_USER_ID" > auth_member.txt
+          if [ -n "$DISCORD_USER_ID" ] && node lm-fetch.js --check ; then
+            echo "U2: Discord在籍を確認。保護KBをKVから更新（取得失敗時はローカル温存）"
+            while IFS= read -r d; do
+              [ -z "$d" ] && continue
+              case "$d" in \#*) continue;; esac
+              if node lm-fetch.js "$d" > "operation/knowledge/$d.tmp" 2>/dev/null && [ -s "operation/knowledge/$d.tmp" ]; then
+                mv "operation/knowledge/$d.tmp" "operation/knowledge/$d"
+              else
+                rm -f "operation/knowledge/$d.tmp"
+              fi
+            done < affili_kb_list.txt
+          else
+            echo "U2未確認 → 旧月次トークンで判定（移行期の二重判定）"
+            python scripts/utils/auth_check.py
+          fi
+
+      - name: Check if today already posted (idempotency)
+        id: posted_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          # 本日のIssueを探す
+          ISSUE_NUM=$(gh api "repos/${{ github.repository }}/issues?labels=daily-operation&state=all&per_page=10" --jq ".[] | select(.title | contains(\"$TODAY\")) | .number" 2>/dev/null | head -1)
+          if [ -z "$ISSUE_NUM" ]; then
+            echo "No issue for today found. Proceeding with posting."
+            echo "skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # SLOT_1 の「投稿完了」コメントのみチェック（SLOT_2/3 の投稿完了で誤スキップしないため）
+          ALREADY_POSTED=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" --jq ".[] | select(.body | contains(\"投稿完了\")) | select(.body | contains(\"SLOT_1\") or (contains(\"SLOT_\") | not)) | .id" 2>/dev/null | head -1)
+          if [ -n "$ALREADY_POSTED" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Issue #$ISSUE_NUM has already been posted (comment $ALREADY_POSTED). Skipping to prevent duplicate post."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Issue #$ISSUE_NUM has no post-complete comment. Proceeding."
+          fi
+
+      - name: Post SLOT_1 immediately
+        if: steps.posted_check.outputs.skip != 'true'
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
+            mkdir -p credentials
+            echo "$GOOGLE_CREDENTIALS_JSON" > credentials/sheets_service_account.json
+            export GOOGLE_CREDENTIALS_PATH=credentials/sheets_service_account.json
+          fi
+          python scripts/post.py

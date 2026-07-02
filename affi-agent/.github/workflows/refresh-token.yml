@@ -1,0 +1,47 @@
+name: Auto Refresh Threads Token (Every 50 Days)
+
+on:
+  schedule:
+    # 50日ごとに実行（毎月1日と20日 AM8:00 JST）
+    - cron: '0 23 1,20 * *'   # 08:00 JST（メイン）
+    - cron: '30 0 2,21 * *'   # 翌日09:30 JST（予備1：前日遅延対策）
+    - cron: '0 3 3,22 * *'    # 翌々日12:00 JST（予備2：最終フェイルセーフ）
+  workflow_dispatch:
+    # 手動実行も可能
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-threads-token:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests python-dotenv loguru
+
+      - name: Refresh Threads Token
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          python scripts/refresh_threads_token.py
+
+      - name: Update GitHub Secret with new token
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          NEW_TOKEN=$(cat new_token.txt)
+          gh secret set THREADS_ACCESS_TOKEN --body "$NEW_TOKEN"
+          echo "GitHub Secret THREADS_ACCESS_TOKEN を更新しました"
+          rm -f new_token.txt

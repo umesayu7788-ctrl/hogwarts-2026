@@ -1,0 +1,72 @@
+name: Monitor SLOT Completion (Daily Late Night)
+
+# 夜遅くに本日の SLOT_1/2/3 投稿完了を確認し、未完了があればDiscord通知。
+# GitHub Actions cron 遅延で投稿が漏れる事故の検知用。
+
+on:
+  schedule:
+    - cron: '0 14 * * *'    # 23:00 JST
+    - cron: '30 14 * * *'   # 23:30 JST
+    - cron: '0 15 * * *'    # 24:00 JST
+    - cron: '30 15 * * *'   # 00:30 JST翌日（cron遅延考慮）
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check-slots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check today's SLOT completion status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          JST_HOUR=$(TZ=Asia/Tokyo date +%H)
+          JST_MIN=$(TZ=Asia/Tokyo date +%M)
+
+          # 本日のIssue取得
+          ISSUE_NUM=$(gh api "repos/${{ github.repository }}/issues?labels=daily-operation&state=all&per_page=10" --jq ".[] | select(.title | contains(\"$TODAY\")) | .number" 2>/dev/null | head -1)
+          if [ -z "$ISSUE_NUM" ]; then
+            echo "本日のIssueが見つかりません。今日は運用日ではない可能性。"
+            exit 0
+          fi
+
+          # 各SLOTの投稿完了チェック
+          MISSING=""
+          for SLOT in 1 2 3; do
+            COMPLETED=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUM/comments?per_page=100" --jq ".[] | select(.body | contains(\"SLOT_$SLOT\") and contains(\"投稿完了\")) | .id" 2>/dev/null | head -1)
+            if [ -z "$COMPLETED" ]; then
+              MISSING="$MISSING SLOT_$SLOT"
+            fi
+          done
+
+          if [ -z "$MISSING" ]; then
+            echo "✅ 全SLOT投稿完了"
+            exit 0
+          fi
+
+          # 重複通知防止：同じ未投稿リストでの通知が既にあればスキップ
+          ALREADY=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUM/comments?per_page=100" --jq ".[] | select(.body | contains(\"未投稿検知\") and contains(\"$MISSING\")) | .id" 2>/dev/null | head -1)
+          if [ -n "$ALREADY" ]; then
+            echo "既に通知済み（同じ未投稿状態）→ skip"
+            exit 0
+          fi
+
+          echo "⚠️ 未投稿あり: $MISSING (現時刻 ${JST_HOUR}:${JST_MIN} JST)"
+
+          # Issueにコメント追加（重複防止記録 + ユーザー可視化）
+          BODY="## ⚠️ 未投稿検知\n\n- 検知時刻: $TODAY ${JST_HOUR}:${JST_MIN} JST\n- 未投稿: $MISSING\n- 原因候補: GitHub Actions cron 遅延（90〜120分遅延が常態化）/ Threads API障害 / トークン期限切れ\n- 対応: 翌日のサイクルは通常どおり実行されます。今日の未投稿分は手動投稿が必要なら workflow_dispatch で実行してください。"
+          printf "%b" "$BODY" | gh issue comment "$ISSUE_NUM" --repo "${{ github.repository }}" --body-file -
+
+          # Discord通知
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"username\":\"🚨 投稿監視\",\"content\":\"@here ⚠️ **本日の未投稿検知: ${MISSING}**\",\"embeds\":[{\"title\":\"原因候補\",\"description\":\"GitHub Actions cron 1〜2時間遅延 / Threads API障害 / トークン期限切れ\",\"color\":15744288,\"fields\":[{\"name\":\"Issue\",\"value\":\"#${ISSUE_NUM}\"},{\"name\":\"検知時刻 JST\",\"value\":\"${JST_HOUR}:${JST_MIN}\"}]}]}" || echo "Discord notify failed"
+          fi
