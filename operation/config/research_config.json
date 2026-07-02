@@ -2,34 +2,25 @@
   "_comment": "ハーマイオニーのリサーチ設定。あなたのThreadsアカウントのジャンルに合わせて自由に変更してください。",
   "_howto": "変更後はClaude Codeを再起動するか、次回の /run-daily-cycle から自動で反映されます。",
 
-  "topic_genre": "AI・テクノロジー",
+  "topic_genre": "腸活・美容・健康・アンチエイジング",
 
-  "youtube_channel_ids": [
-    "UCfapRkagDtoQEkGeyD3uERQ",
-    "UCboaqA4fwGpljEKeUjO1iVQ",
-    "UCopTsucSPUP_N5n4fcLQtXQ",
-    "UCvHpETRVi1tXeRJoYiXHJqw",
-    "UCZQVTC3uLCyuJUOcRlguazA"
-  ],
+  "youtube_channel_ids": [],
+
   "_youtube_channel_notes": [
-    "KEITO【AI&WEB ch】",
-    "SHIFT AI ニュース",
-    "ここなのAI大学",
-    "まさおAIじっくり解説ch",
-    "にゃんたのAIチャンネル"
+    "（必要に応じてお好みの腸活・美容系チャンネルIDを追加してください）"
   ],
 
   "youtube_keywords": [
-    "AIエージェント Threads 活用",
-    "Claude Code SNS自動化 実例",
-    "AIエージェント 自動投稿 運用",
-    "Threads 運用 効率化 AI"
+    "腸活 やり方 2024",
+    "腸内環境 改善 習慣",
+    "美容 インナーケア スキンケア",
+    "アンチエイジング 40代 美容",
+    "便秘 解消 食事"
   ],
 
   "rss_feeds": [
-    "https://feeds.feedburner.com/oreilly/radar",
-    "https://machinelearningmastery.com/feed/",
-    "https://venturebeat.com/category/ai/feed/",
-    "https://www.marktechpost.com/feed/"
+    "https://www.allure.com/feed/rss",
+    "https://www.healthline.com/rss",
+    "https://www.mindbodygreen.com/rss"
   ]
 }
