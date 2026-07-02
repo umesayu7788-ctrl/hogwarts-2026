@@ -28,7 +28,7 @@ ref_integrity: 7731
 - 「🎤 自分のアカウントの声」セクション：owner_voice を抽出
 - SYS_REF_LW_CONF_002：lw_constraint_001〜003 を読み込む
 
-ハーマイオニーのブリーフィング（当日のGitHub Issue コメント）を読み込む。
+照史のブリーフィング（当日のGitHub Issue コメント）を読み込む。
 
 ### P2：lw_ptn 適用ルール
 

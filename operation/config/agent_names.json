@@ -1,10 +1,10 @@
 {
   "_comment": "エージェントの表示名とシステム名を自由に変更できます。変更後はClaude Codeを再起動してください。",
-  "system_name": "エージェントホグワーツ",
-  "harry":    "ハリー",
-  "hermione": "ハーマイオニー",
-  "luna":     "ルーナ",
-  "malfoy":   "マルフォイ",
-  "ron":      "ロン",
-  "snape":    "スネイプ"
+  "system_name": "WEST.チーム",
+  "harry":    "しげ",
+  "hermione": "照史",
+  "luna":     "淳太",
+  "malfoy":   "小瀧",
+  "ron":      "かみちゃん",
+  "snape":    "流星"
 }
