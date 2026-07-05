@@ -386,7 +386,7 @@ def main():
 
         comment_body = f"""## ✍️ {_n('luna')}より：3時間帯投稿案 完成
 
-**作成日時:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
+作成日時: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
 {posts}
 

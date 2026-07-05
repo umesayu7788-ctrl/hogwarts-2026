@@ -19,8 +19,14 @@
   ],
 
   "rss_feeds": [
-    "https://www.allure.com/feed/rss",
     "https://www.healthline.com/rss",
     "https://www.mindbodygreen.com/rss"
-  ]
+  ],
+
+  "_optional_secrets": {
+    "YOUTUBE_API_KEY": "YouTubeリサーチ強化（未設定でもRSS+実体験で動作）",
+    "SPREADSHEET_ID": "投稿・フォロワー数の自動記録（任意）",
+    "GOOGLE_CREDENTIALS_JSON": "Sheets連携用サービスアカウントJSON（任意）",
+    "GH_PAT": "Threadsトークン自動更新のSecret書き込み（GH_TOKENでも可）"
+  }
 }

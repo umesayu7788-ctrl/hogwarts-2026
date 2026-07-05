@@ -38,12 +38,21 @@ jobs:
         run: |
           python scripts/refresh_threads_token.py
 
-      - name: Update GitHub Secret with new token (requires GH_PAT)
+      - name: Update GitHub Secret with new token (requires GH_PAT or GH_TOKEN)
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_TOKEN_FALLBACK: ${{ secrets.GH_TOKEN }}
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "WARNING: GH_PAT secret 未設定。secret更新スキップ（アーティファクトで受け渡し）"
+          if [ -n "$GH_PAT" ]; then
+            export GH_TOKEN="$GH_PAT"
+          elif [ -n "$GH_TOKEN_FALLBACK" ]; then
+            export GH_TOKEN="$GH_TOKEN_FALLBACK"
+          else
+            echo "WARNING: GH_PAT / GH_TOKEN 未設定。secret更新スキップ（アーティファクトで受け渡し）"
+            exit 0
+          fi
+          if [ ! -f new_token.txt ]; then
+            echo "new_token.txt なし — リフレッシュ失敗の可能性"
             exit 0
           fi
           NEW_TOKEN=$(cat new_token.txt)

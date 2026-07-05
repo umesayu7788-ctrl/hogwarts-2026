@@ -54,19 +54,17 @@ YOUTUBE_CHANNEL_IDS = _research_cfg.get("youtube_channel_ids", [
 
 # ★ キーワード検索でトレンド動画を拾う設定（research_config.json で変更可能）
 YOUTUBE_KEYWORD_SEARCHES = _research_cfg.get("youtube_keywords", [
-    "AIエージェント Threads 活用",
-    "Claude Code SNS自動化 実例",
-    "AIエージェント 自動投稿 運用",
-    "Threads 運用 効率化 AI",
+    "腸活 やり方",
+    "腸内環境 改善 習慣",
+    "デトックス 食事",
+    "発酵食品 効果",
+    "夜勤 疲れ 食事",
 ])
 
 # ★ 購読するRSSフィード（research_config.json で変更可能）
-RSS_FEEDS = _research_cfg.get("rss_feeds", [
-    "https://feeds.feedburner.com/oreilly/radar",
-    "https://machinelearningmastery.com/feed/",
-    "https://venturebeat.com/category/ai/feed/",
-    "https://www.marktechpost.com/feed/",
-])
+RSS_FEEDS = _research_cfg.get("rss_feeds", [])
+
+TOPIC_GENRE = _research_cfg.get("topic_genre", "腸活・美容・健康")
 
 BUZZ_POSTS_PATH = os.path.join(SCRIPT_DIR, "..", "operation", "knowledge", "kb_sys_ref_v001.md")
 WEEKLY_DIR      = os.path.join(SCRIPT_DIR, "..", "operation", "weekly")
@@ -439,6 +437,61 @@ def load_snape_insights() -> str:
     return "\n\n".join(sections)
 
 
+def load_voice_definition() -> str:
+    """kb_sys_ref_v001.mdから声定義セクションを抽出する"""
+    try:
+        with open(BUZZ_POSTS_PATH, "r", encoding="utf-8") as f:
+            content = f.read()
+        marker = "## 🎤 自分のアカウントの声"
+        if marker in content:
+            start = content.index(marker)
+            end = content.find("\n## ", start + len(marker))
+            return content[start:end].strip() if end != -1 else content[start:].strip()
+        return ""
+    except FileNotFoundError:
+        return ""
+
+
+def is_health_persona(voice_def: str) -> bool:
+    """腸活・健康系ペルソナかどうか（AI運用系とブリーフィング形式を切り替える）"""
+    if not voice_def:
+        return TOPIC_GENRE and not any(k in TOPIC_GENRE for k in ("AI", "Claude", "自動化"))
+    health_markers = ("腸活", "腸デトックス", "看護師", "SARI", "添加物", "デトックス")
+    ai_markers = ("ChatGPT", "OpenClaw", "Claude Code", "AIツール", "AIエージェント")
+    health_score = sum(1 for m in health_markers if m in voice_def)
+    ai_score = sum(1 for m in ai_markers if m in voice_def)
+    return health_score >= ai_score
+
+
+def _briefing_slot_block(slot_label: str, health_mode: bool) -> str:
+    if health_mode:
+        return f"""### {slot_label}
+推奨ネタ: [ネタの要約（1〜2文）]
+ネタ軸: [時間軸 / コスト軸 / 不安解消軸 / 体験軸 のいずれか1つ]
+フックに使う固有名詞: [腸活/添加物/発酵食品/夜勤/看護師/腸デトックス等を必ず1つ以上]
+フックに使う具体的数字: [−10kg/20年/3人/30分/3ヶ月等を必ず1つ以上]
+読者の生活インパクト: [この投稿で読者の生活がどう変わるか1文]
+角度: [どういう切り口で書くか]
+感情フック: [好奇心/共感/驚き/危機感のどれか]
+参考バズ投稿: [類似の過去投稿No.（あれば）]
+NGワード/注意点: [病院名・居住地・患者特定・医学的断定は禁止]
+リサーチ元: [YouTube動画タイトル or ニュース記事タイトル or オーナー実体験]
+"""
+    return f"""### {slot_label}
+推奨ネタ: [ネタの要約（1〜2文）]
+ネタ軸: [時間軸 / コスト軸 / 不安解消軸 のいずれか1つ]
+フックに使う固有名詞: [Claude Code / ChatGPT / Gemini / OpenClaw 等を必ず1つ以上]
+フックに使う具体的数字: [金額・倍数・期間・日数等を必ず1つ以上]
+読者の生活インパクト: [この投稿で読者の生活がどう変わるか1文]
+角度: [どういう切り口で書くか]
+感情フック: [好奇心/共感/驚き/危機感のどれか]
+参考バズ投稿: [類似の過去投稿No.（あれば）]
+NGワード/注意点: [あれば]
+OpenClaw連動: [あり（メイン/誘導）/ なし]
+リサーチ元: [YouTube動画タイトル or ニュース記事タイトル]
+"""
+
+
 def load_buzz_posts() -> str:
     """kb_sys_ref_v001.md を読み込む"""
     try:
@@ -451,8 +504,11 @@ def load_buzz_posts() -> str:
 
 def generate_briefing(videos: list, news: list, buzz_posts: str, theme: str,
                       performance: dict = None, recycle_candidate: dict = None,
-                      snape_insights: str = "") -> str:
+                      snape_insights: str = "", voice_def: str = "") -> str:
     """Gemini Flash でブリーフィングを生成する（タイムアウト・フォールバック付き）"""
+
+    health_mode = is_health_persona(voice_def)
+    topic = theme or TOPIC_GENRE or "（指定なし：自動選定してください）"
 
     # パフォーマンスデータセクションを組み立て
     perf_section = ""
@@ -528,18 +584,54 @@ def generate_briefing(videos: list, news: list, buzz_posts: str, theme: str,
 - このリサイクルスロットはSLOT_2（18時）に使うこと
 """
 
+    if health_mode:
+        forbidden_section = """
+## 採用禁止のネタ
+以下のネタは絶対に選ばないこと：
+- ChatGPT / Gemini / OpenClaw / Claude Code 等のAIツール紹介・自動化の話
+- Threads運用の仕組み・副業・稼ぐ系の話
+- 病院名・居住地・患者特定・医学的断定（治る/効く/必ず痩せる）
+- マニアックなベンチマーク比較・抽象的な業界動向論
+
+## 必ず守ること
+- 声定義の「看護師20年なのに」定番つかみを全SLOTで使う前提のネタにすること
+- オーナーの実体験（夜勤・3人の子・−10kg・添加物・腸活・心のデトックス）を軸にすること
+- YouTube/RSSに情報が少なくても、実体験バンクから3スロット別角度でネタを作ること
+"""
+        slot_footer = "★全スロットで「ネタ軸」「固有名詞」「具体的数字」「読者の生活インパクト」が埋まっていること★"
+        youtube_note = "※ keyword フィールドがある動画は設定キーワード（腸活・美容等）でヒットした最新情報です"
+        news_label = "## 収集した健康・美容ニュース"
+    else:
+        forbidden_section = """
+## 採用禁止のネタ
+以下のネタは絶対に選ばないこと：
+- マニアックなベンチマーク比較（Kimi K2/Qwen3/Llama等のモデル比較）
+- 抽象的な「AIの将来」「業界動向」論
+- 「〇〇とは何か」の解説系（具体的な使い方・体験談でないもの）
+- OpenClawを全く含まないスロットが3つとも続く場合
+  → 3スロットのうち最低1つはOpenClaw連動とすること
+"""
+        slot_footer = "★全スロットで「ネタ軸」「固有名詞」「具体的数字」「読者の生活インパクト」「OpenClaw連動」が埋まっていること★"
+        youtube_note = "※ keyword フィールドがある動画はキーワード検索「AIエージェント/Claude Code」でヒットした最新情報です"
+        news_label = "## 収集したAIニュース"
+
+    voice_section = f"""
+## オーナーの声定義（最優先・厳守）
+{voice_def[:2500] if voice_def else "（声定義なし）"}
+""" if health_mode else ""
+
     prompt = f"""
 あなたはThreads運用のリサーチ・分析担当「{_n('hermione')}」です。
 以下のデータをもとに、今日の投稿ライター（{_n('luna')}）向けブリーフィングを作成してください。
 
 ## 今日のテーマ方針
-{theme if theme else "（指定なし：自動選定してください）"}
-
+{topic}
+{voice_section}
 ## 収集したYouTube最新動画（監視チャンネル＋キーワード検索）
-※ keyword フィールドがある動画はキーワード検索「AIエージェント/Claude Code」でヒットした最新情報です
+{youtube_note}
 {json.dumps(videos, ensure_ascii=False, indent=2)}
 
-## 収集したAIニュース
+{news_label}
 {json.dumps(news, ensure_ascii=False, indent=2)}
 {perf_section}
 {recycle_section}
@@ -550,59 +642,17 @@ def generate_briefing(videos: list, news: list, buzz_posts: str, theme: str,
 {buzz_posts[:2000]}
 
 ---
-## 採用禁止のネタ
-以下のネタは絶対に選ばないこと：
-- マニアックなベンチマーク比較（Kimi K2/Qwen3/Llama等のモデル比較）
-- 抽象的な「AIの将来」「業界動向」論
-- 「〇〇とは何か」の解説系（具体的な使い方・体験談でないもの）
-- OpenClawを全く含まないスロットが3つとも続く場合
-  → 3スロットのうち最低1つはOpenClaw連動とすること
-
+{forbidden_section}
 ---
 以下のフォーマットでブリーフィングを出力してください。全スロットで全項目を必ず埋めること：
 
 【本日のブリーフィング】
 
-### SLOT_1（7時・朝投稿）
-推奨ネタ: [ネタの要約（1〜2文）]
-**ネタ軸**: [時間軸 / コスト軸 / 不安解消軸 のいずれか1つを必ず選択]
-**フックに使う固有名詞**: [Claude Code / ChatGPT / Gemini / OpenClaw 等を必ず1つ以上]
-**フックに使う具体的数字**: [金額・倍数・期間・日数等を必ず1つ以上]
-**読者の生活インパクト**: [この投稿で読者の生活がどう変わるか1文]
-角度: [どういう切り口で書くか]
-感情フック: [好奇心/共感/驚き/危機感のどれか]
-参考バズ投稿: [類似の過去投稿No.（あれば）]
-NGワード/注意点: [あれば]
-OpenClaw連動: [あり（メイン/誘導）/ なし]
-リサーチ元: [YouTube動画タイトル or ニュース記事タイトル]
+{_briefing_slot_block("SLOT_1（7時・朝投稿）", health_mode)}
+{_briefing_slot_block("SLOT_2（18時・夕方投稿）", health_mode)}
+{_briefing_slot_block("SLOT_3（21時・夜投稿）", health_mode)}
 
-### SLOT_2（18時・夕方投稿）
-推奨ネタ: [ネタの要約（1〜2文）]
-**ネタ軸**: [時間軸 / コスト軸 / 不安解消軸 のいずれか1つを必ず選択]
-**フックに使う固有名詞**: [Claude Code / ChatGPT / Gemini / OpenClaw 等を必ず1つ以上]
-**フックに使う具体的数字**: [金額・倍数・期間・日数等を必ず1つ以上]
-**読者の生活インパクト**: [この投稿で読者の生活がどう変わるか1文]
-角度: [どういう切り口で書くか]
-感情フック: [好奇心/共感/驚き/危機感のどれか]
-参考バズ投稿: [類似の過去投稿No.（あれば）]
-NGワード/注意点: [あれば]
-OpenClaw連動: [あり（メイン/誘導）/ なし]
-リサーチ元: [YouTube動画タイトル or ニュース記事タイトル]
-
-### SLOT_3（21時・夜投稿）
-推奨ネタ: [ネタの要約（1〜2文）]
-**ネタ軸**: [時間軸 / コスト軸 / 不安解消軸 のいずれか1つを必ず選択]
-**フックに使う固有名詞**: [Claude Code / ChatGPT / Gemini / OpenClaw 等を必ず1つ以上]
-**フックに使う具体的数字**: [金額・倍数・期間・日数等を必ず1つ以上]
-**読者の生活インパクト**: [この投稿で読者の生活がどう変わるか1文]
-角度: [どういう切り口で書くか]
-感情フック: [好奇心/共感/驚き/危機感のどれか]
-参考バズ投稿: [類似の過去投稿No.（あれば）]
-NGワード/注意点: [あれば]
-OpenClaw連動: [あり（メイン/誘導）/ なし]
-リサーチ元: [YouTube動画タイトル or ニュース記事タイトル]
-
-★全スロットで「ネタ軸」「固有名詞」「具体的数字」「読者の生活インパクト」「OpenClaw連動」が埋まっていること★
+{slot_footer}
 """
 
     return call_gemini(prompt, GEMINI_API_KEY)
@@ -640,7 +690,13 @@ def main():
         recycle_candidate = check_recycle_mode()
         snape_insights = load_snape_insights()
 
-        briefing = generate_briefing(videos, news, buzz_posts, args.theme, performance, recycle_candidate, snape_insights)
+        voice_def = load_voice_definition()
+        logger.info(f"声定義ロード: {len(voice_def)}文字, health_mode={is_health_persona(voice_def)}")
+
+        briefing = generate_briefing(
+            videos, news, buzz_posts, args.theme, performance,
+            recycle_candidate, snape_insights, voice_def,
+        )
         logger.info("ブリーフィング生成完了")
 
         comment_body = f"""## 🔍 {_n('hermione')}より：リサーチ＆分析完了
