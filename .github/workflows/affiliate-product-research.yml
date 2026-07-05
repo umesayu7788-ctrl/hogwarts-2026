@@ -1,0 +1,58 @@
+name: Affiliate Product Research
+
+# 火・金・土の朝、daily-cycle より前に腸活商品をリサーチ
+on:
+  schedule:
+    - cron: '20 20 * * *'   # 05:20 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  product-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+          pip install pyyaml
+
+      - name: Check affiliate day (Tue/Fri/Sat JST)
+        id: dow
+        run: |
+          DOW=$(TZ=Asia/Tokyo date +%u)
+          if [ "$DOW" = "2" ] || [ "$DOW" = "5" ] || [ "$DOW" = "6" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Affiliate day (DOW=$DOW) — running product research"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Not affiliate day (DOW=$DOW) — skip"
+          fi
+
+      - name: Run Rakuten product research
+        if: steps.dow.outputs.run == 'true'
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+        run: python scripts/affiliate_product_research.py
+
+      - name: Upload product JSON artifact
+        if: steps.dow.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: affiliate-products-${{ github.run_id }}
+          path: affi-agent/operation/products/*.json
+          if-no-files-found: ignore
+          retention-days: 7

@@ -44,6 +44,53 @@ def get_luna_posts(issue_number: int, gh: GitHubIssues) -> str:
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BUZZ_POSTS_PATH = os.path.join(SCRIPT_DIR, "..", "operation", "knowledge", "kb_sys_ref_v001.md")
+PRODUCTS_DIR = os.path.join(SCRIPT_DIR, "..", "affi-agent", "operation", "products")
+
+
+def resolve_post_type() -> str:
+    """POST_TYPE 環境変数または曜日から投稿タイプを決定"""
+    pt = os.getenv("POST_TYPE", "auto")
+    if pt != "auto":
+        return pt
+    dow = datetime.now().weekday()  # Mon=0
+    if dow in (1, 4, 5):
+        return "affiliate"
+    if dow in (0, 3):
+        return "education"
+    return "interest"
+
+
+def load_today_product() -> dict:
+    import json as _json
+    today = datetime.now().strftime("%Y-%m-%d")
+    path = os.path.join(PRODUCTS_DIR, f"{today}.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = _json.load(f)
+        return data.get("selected") or {}
+    except (FileNotFoundError, _json.JSONDecodeError):
+        return {}
+
+
+def check_affiliate_slot3(slot3_text: str, product: dict) -> list[str]:
+    """アフィリ日の SLOT_3 をコードレベルで検証"""
+    issues: list[str] = []
+    parts = [p.strip() for p in slot3_text.split("===THREAD===") if p.strip()]
+    if len(parts) != 2:
+        issues.append(f"SLOT_3は親+ツリー1の2ブロック必須（現在{len(parts)}ブロック）")
+        return issues
+    parent, tree = parts[0], parts[1]
+    if re.search(r"(?i)(?:^|\s)(?:#?pr|【pr】)", parent) or re.search(r"https?://", parent):
+        issues.append("親投稿にPR表記またはURLがある（親は体験のみ）")
+    if not re.search(r"(?i)(?:^|\s)(?:#?pr|pr\s)", tree):
+        issues.append("ツリー1に pr 表記がない")
+    url = (product.get("affiliate_url") or product.get("url", "")) if product else ""
+    if url and url not in tree:
+        issues.append("ツリー1にアフィリURLが含まれていない")
+    for bad in ("治る", "効く", "必ず", "100%", "私のリンクから"):
+        if bad in parent + tree:
+            issues.append(f"禁止表現「{bad}」が含まれている")
+    return issues
 
 
 def load_voice_definition() -> str:
@@ -61,11 +108,29 @@ def load_voice_definition() -> str:
         return ""
 
 
-def review_posts(posts_text: str) -> str:
+def review_posts(posts_text: str, post_type: str = "interest", product: dict | None = None) -> str:
     """Gemini Flash で投稿案を厳格に校閲する（タイムアウト・フォールバック付き）"""
 
     voice_def = load_voice_definition()
     logger.info(f"マルフォイ声定義ロード: {len(voice_def)}文字")
+
+    affiliate_rules = ""
+    if post_type == "affiliate":
+        product_hint = ""
+        if product:
+            product_hint = f"""
+紹介商品: {product.get('name', '')}
+アフィリURL（ツリー最終行必須）: {product.get('affiliate_url') or product.get('url', '')}
+"""
+        affiliate_rules = f"""
+## アフィリ日追加ルール（SLOT_3のみ・厳守）
+{product_hint}
+15. SLOT_3は ===THREAD=== を1回だけ（親+ツリー1の2ブロック）。3〜5投稿目は不要
+16. 親投稿: PR表記・URL禁止。商品名OK。体験ベース
+17. ツリー1: 続き+注意点+末尾に pr + 改行 + アフィリURL
+18. 「治る」「効く」「必ず」「100%」「私のリンクから買って」禁止
+19. アフィリ日はSLOT_3の180文字ルール（基準14）はツリー1のみ適用（親は80文字目安でOK）
+"""
 
     system_instruction = f"""あなたはThreads投稿の品質管理責任者です。
 以下の声定義を基準にして投稿案を審査してください。
@@ -80,6 +145,7 @@ def review_posts(posts_text: str) -> str:
 """
 
     prompt = f"""以下の投稿案を審査しろ。
+投稿タイプ: {post_type}
 
 ## 審査対象
 {posts_text}
@@ -98,8 +164,8 @@ def review_posts(posts_text: str) -> str:
 11. 冒頭に曖昧表現あり（「プロ級」「ある〇〇」「最新の〇〇」「神レベル」等）
 12. 「稼げる」「月◯万」等の直接的収益表現が含まれている
 13. マニアックなベンチマーク比較が含まれている（Kimi K2/Qwen3/Llama等）
-14. 2〜4投稿目のいずれかが180文字未満
-
+14. SLOT_1・SLOT_2の2〜4投稿目のいずれかが180文字未満（アフィリ日のSLOT_3は別ルール）
+{affiliate_rules}
 ## 合格基準
 - 声定義の語尾（「〜だよ」「〜んだ」「〜のさ」「〜よね」「〜さ」）が使われていればOK
 - 感情フックが機能している
@@ -165,7 +231,9 @@ def extract_all_slot_texts(luna_posts: str) -> dict:
 
 
 def main():
-    logger.info("=== マルフォイ 校閲開始 ===")
+    post_type = resolve_post_type()
+    product = load_today_product() if post_type == "affiliate" else {}
+    logger.info(f"=== マルフォイ 校閲開始 (post_type={post_type}) ===")
 
     gh    = GitHubIssues(GITHUB_TOKEN, GITHUB_REPO)
     issue = gh.get_or_create_today_issue()
@@ -189,7 +257,16 @@ def main():
             gh.add_comment(issue.number, f"## 🎩 {_n('malfoy')}より：差し戻し（禁止文字検出）\n\n**審査日時:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n禁止文字が含まれています: {chars_str}\n\n強調には `**` ではなく「」を使うこと。ルーナに修正させます。")
             sys.exit(10)
 
-        review_result = review_posts(luna_posts)
+        if post_type == "affiliate" and slot_texts_pre.get(3):
+            aff_issues = check_affiliate_slot3(slot_texts_pre[3], product)
+            if aff_issues:
+                msg = "\n".join(f"- {i}" for i in aff_issues)
+                logger.warning(f"アフィリルール違反 → 自動差し戻し: {aff_issues}")
+                gh.update_pipeline_status(issue.number, "malfoy", "rejected")
+                gh.add_comment(issue.number, f"## 🎩 {_n('malfoy')}より：差し戻し（アフィリルール）\n\n**審査日時:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n{msg}\n\nルーナに修正させます。")
+                sys.exit(10)
+
+        review_result = review_posts(luna_posts, post_type=post_type, product=product)
         is_approved   = "全スロット承認申請可" in review_result or "承認申請可" in review_result
         logger.info(f"審査結果: {'承認申請可' if is_approved else '差し戻し'}")
 

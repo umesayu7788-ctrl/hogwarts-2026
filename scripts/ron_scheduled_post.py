@@ -35,6 +35,60 @@ SLOT_LABELS = {
     3: "🌙 21時・夜投稿",
 }
 
+PRODUCTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "affi-agent", "operation", "products")
+
+
+def _has_pr_marker(text: str) -> bool:
+    if any(tag in text for tag in ["#PR", "#広告", "[PR]", "【PR】", "#pr"]):
+        return True
+    return any(line.strip().lower() == "pr" for line in text.splitlines())
+
+
+def ensure_pr_tag(text: str, is_affiliate: bool = False) -> str:
+    """アフィリ投稿でPR表記が無ければツリー最終ブロックに挿入"""
+    if not is_affiliate or _has_pr_marker(text):
+        return text
+    if "===THREAD===" in text:
+        parts = text.split("===THREAD===")
+        parts[-1] = f"\npr\n{parts[-1].lstrip()}"
+        return "===THREAD===".join(parts)
+    return f"{text.rstrip()}\npr"
+
+
+def looks_like_affiliate(text: str) -> bool:
+    signals = ["a.r10.to", "afl.rakuten.co.jp", "rakuten.co.jp", "amzn.to", "amazon.co.jp"]
+    return any(s in text for s in signals)
+
+
+def replace_affiliate_placeholder(text: str) -> str:
+    """AIがプレースホルダ化したアフィリURLを本日の商品JSONから置換"""
+    import json as _json
+    patterns = [
+        r'\[楽天アフィリ(?:エイト)?リンク[^\]]*\]',
+        r'\[ここにリンク[^\]]*\]',
+        r'\[アフィリ(?:エイト)?リンク[^\]]*\]',
+        r'\[商品リンク[^\]]*\]',
+    ]
+    if not any(re.search(p, text) for p in patterns):
+        return text
+    JST = timezone(timedelta(hours=9))
+    now_jst = datetime.now(JST)
+    for date_str in [now_jst.strftime("%Y-%m-%d"), (now_jst - timedelta(days=1)).strftime("%Y-%m-%d")]:
+        path = os.path.join(PRODUCTS_DIR, f"{date_str}.json")
+        try:
+            with open(path, encoding="utf-8") as f:
+                selected = (_json.load(f).get("selected") or {})
+            url = selected.get("affiliate_url") or selected.get("url", "")
+            if url:
+                for pat in patterns:
+                    text = re.sub(pat, url, text)
+                logger.info(f"アフィリプレースホルダを実URLで置換: {url[:60]}...")
+                return text
+        except (FileNotFoundError, _json.JSONDecodeError):
+            continue
+    logger.warning("プレースホルダ検出だが商品JSONからURL取得できず")
+    return text
+
 
 def create_threads_container(text: str, reply_to_id: str = None) -> str:
     url = f"{THREADS_API_BASE}/{THREADS_USER_ID}/threads"
@@ -170,6 +224,13 @@ def main():
         sys.exit(0)  # exit(0)=正常終了でcronを維持
 
     logger.info(f"投稿テキスト（先頭50文字）: {post_text[:50]}...")
+
+    if args.slot == 3:
+        post_text = replace_affiliate_placeholder(post_text)
+        is_aff = looks_like_affiliate(post_text)
+        post_text = ensure_pr_tag(post_text, is_affiliate=is_aff)
+        if is_aff:
+            logger.info("アフィリ投稿と判定。PR表記を確認・付与済み。")
 
     # ツリー投稿
     thread_parts = [p.strip() for p in post_text.split("===THREAD===") if p.strip()]

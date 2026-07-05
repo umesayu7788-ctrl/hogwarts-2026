@@ -28,6 +28,9 @@ pandas>=2.0.0
 # ロギング
 loguru>=0.7.0
 
+# アフィリ商品リサーチ（genre_config.yaml）
+PyYAML>=6.0.0
+
 # Google Sheets API
 gspread>=6.0.0
 google-auth>=2.20.0

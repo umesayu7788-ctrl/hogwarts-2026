@@ -23,6 +23,7 @@ GITHUB_REPO         = os.getenv("GITHUB_REPO")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BUZZ_POSTS_PATH = os.path.join(SCRIPT_DIR, "..", "operation", "knowledge", "kb_sys_ref_v001.md")
+PRODUCTS_DIR = os.path.join(SCRIPT_DIR, "..", "affi-agent", "operation", "products")
 
 
 def get_briefing_from_issue(issue_number: int, gh: GitHubIssues) -> str:
@@ -96,7 +97,52 @@ def load_reference_posts() -> str:
         return "（参考投稿なし）"
 
 
-def generate_posts(briefing: str, voice_def: str, ref_posts: str, malfoy_feedback: str = "") -> str:
+def load_today_product() -> dict:
+    """本日の楽天商品（アフィリ日のみ）"""
+    import json as _json
+    today = datetime.now().strftime("%Y-%m-%d")
+    path = os.path.join(PRODUCTS_DIR, f"{today}.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = _json.load(f)
+        return data.get("selected") or {}
+    except (FileNotFoundError, _json.JSONDecodeError):
+        return {}
+
+
+def build_affiliate_section(product: dict) -> str:
+    """SLOT_3 アフィリ投稿ルール（親+ツリー1の2ブロック構造）"""
+    if not product:
+        return ""
+    product_name = product.get("name", "")
+    product_url = product.get("affiliate_url") or product.get("url", "")
+    product_price = product.get("price", 0)
+    product_review_count = product.get("review_count", 0)
+    product_review_avg = product.get("review_average", 0)
+    sleep_conn = product.get("sleep_connection", "")
+    return f"""
+---
+## ★今日のアフィリ商品（SLOT_3で必ず紹介）★
+
+商品名: {product_name}
+価格: ¥{product_price:,}
+レビュー: ★{product_review_avg}（{product_review_count}件）
+ジャンル軸への接続: {sleep_conn}
+アフィリリンク（ツリー最終行にそのまま貼る）: {product_url}
+
+### アフィリ投稿ルール（SLOT_3のみ・厳守）
+- SLOT_3は ===THREAD=== を **1個だけ** 使い、合計 **2ブロック**（親投稿 + ツリー1）
+- SLOT_1・SLOT_2は通常の腸活教育・共感投稿（PRなし・リンクなし）
+- 親投稿: 看護師ママの体験ベース。商品名OK。PR表記・リンクは **絶対NG**
+- ツリー1: 続き + 弱点や注意点1つ + 末尾に pr または PR + 改行 + 以下URLを **そのまま1行で**
+{product_url}
+- NG: 【PR】/#PR/治る/効く/必ず/100%/私のリンクから買って
+- 未使用商品は「気になってる」「試したい」止まり（嘘の体験NG）
+"""
+
+
+def generate_posts(briefing: str, voice_def: str, ref_posts: str, malfoy_feedback: str = "",
+                   post_type: str = "interest", product: dict | None = None) -> str:
     """Gemini Flash で投稿案3案を生成する（タイムアウト・フォールバック付き）"""
 
     persona_name = extract_persona_name(voice_def)
@@ -125,6 +171,34 @@ def generate_posts(briefing: str, voice_def: str, ref_posts: str, malfoy_feedbac
 ## ⚠️ マルフォイからの前回差し戻し指摘（必ず反映すること）
 {malfoy_feedback}
 """ if malfoy_feedback else ""
+
+    affiliate_section = build_affiliate_section(product) if post_type == "affiliate" and product else ""
+    if post_type == "affiliate" and not product:
+        affiliate_section = """
+---
+## ⚠️ アフィリ日だが商品データなし
+SLOT_3は腸活・サプリ系の「気になってる商品」として体験談形式で書く（リンク・PRなし）。
+"""
+
+    slot3_format = """🌙 SLOT_3【21時・夜投稿】（アフィリ・2ブロック構造）
+━━━━━━━━━━━━━━━━━━━━
+{opening_line}
+[親投稿: フック+体験+商品名OK。PR/リンクNG。===THREAD=== はこの後1回だけ]
+===THREAD===
+[ツリー1: 続き+注意点+pr行+アフィリURLをそのまま最終行]
+━━━━━━━━━━━━━━━━━━━━""" if post_type == "affiliate" else """🌙 SLOT_3【21時・夜投稿】（感情フック・リスト系）
+━━━━━━━━━━━━━━━━━━━━
+{opening_line}
+[この後に本題のフックを続ける。合計80文字以内]
+===THREAD===
+[2投稿目：本文①]
+===THREAD===
+[3投稿目：本文②]
+===THREAD===
+[4投稿目：本文③（リスト系なら追加ポイント）]
+===THREAD===
+[5投稿目：まとめ＋価値提示型CTA]
+━━━━━━━━━━━━━━━━━━━━"""
 
     prompt = f"""
 ## 発信テーマ（必須・厳守）
@@ -160,6 +234,7 @@ def generate_posts(briefing: str, voice_def: str, ref_posts: str, malfoy_feedbac
 ## ハーマイオニーのブリーフィング（ネタのヒントとして使う）
 {briefing}
 {feedback_section}
+{affiliate_section}
 
 ---
 ## ★有益さと密度の基準★
@@ -274,19 +349,7 @@ def generate_posts(briefing: str, voice_def: str, ref_posts: str, malfoy_feedbac
 [4投稿目：まとめ＋価値提示型CTA]
 ━━━━━━━━━━━━━━━━━━━━
 
-🌙 SLOT_3【21時・夜投稿】（感情フック・リスト系）
-━━━━━━━━━━━━━━━━━━━━
-{opening_line}
-[この後に本題のフックを続ける。合計80文字以内]
-===THREAD===
-[2投稿目：本文①]
-===THREAD===
-[3投稿目：本文②]
-===THREAD===
-[4投稿目：本文③（リスト系なら追加ポイント）]
-===THREAD===
-[5投稿目：まとめ＋価値提示型CTA]
-━━━━━━━━━━━━━━━━━━━━
+{slot3_format}
 """
 
     result = call_gemini(prompt, GEMINI_API_KEY, system_instruction=system_instruction)
@@ -361,7 +424,22 @@ def force_opening_line(text: str, opening: str) -> str:
 
 
 def main():
-    logger.info("=== ルーナ 投稿案作成開始 ===")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--post-type", choices=["education", "interest", "affiliate", "auto"],
+                        default=os.getenv("POST_TYPE", "auto"))
+    args = parser.parse_args()
+    post_type = args.post_type
+    if post_type == "auto":
+        dow = datetime.now().weekday()  # Mon=0
+        if dow in (1, 4, 5):  # Tue/Fri/Sat
+            post_type = "affiliate"
+        elif dow in (0, 3):   # Mon/Thu
+            post_type = "education"
+        else:
+            post_type = "interest"
+
+    logger.info(f"=== ルーナ 投稿案作成開始 (post_type={post_type}) ===")
 
     gh    = GitHubIssues(GITHUB_TOKEN, GITHUB_REPO)
     issue = gh.get_or_create_today_issue()
@@ -381,7 +459,12 @@ def main():
         if malfoy_feedback:
             logger.info("マルフォイの差し戻しコメントを取得しました。フィードバックを反映して再生成します。")
 
-        posts = generate_posts(briefing, voice_def, ref_posts, malfoy_feedback)
+        product = load_today_product() if post_type == "affiliate" else {}
+        if post_type == "affiliate" and product:
+            logger.info(f"アフィリ商品: {product.get('name', '')[:50]}... ¥{product.get('price')}")
+
+        posts = generate_posts(briefing, voice_def, ref_posts, malfoy_feedback,
+                               post_type=post_type, product=product)
         logger.info("投稿案3案生成完了")
 
         comment_body = f"""## ✍️ {_n('luna')}より：3時間帯投稿案 完成
