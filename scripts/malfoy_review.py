@@ -93,8 +93,8 @@ def review_posts(posts_text: str) -> str:
 6. CTAに「何を届けるか」の価値提示がない
 7. 禁止文字（** / * / " / " " / ' ' / `）が含まれている
 8. 同じネタ・切り口が複数スロットで重複している
-9. 冒頭60〜80文字に固有名詞がない（Claude Code/ChatGPT/Gemini/OpenClaw等）
-10. 冒頭60〜80文字に具体的数字がない（金額・倍数・期間等）
+9. 冒頭60〜80文字に固有名詞がない（腸活/添加物/発酵食品/夜勤/看護師/腸デトックス等）
+10. 冒頭60〜80文字に具体的数字がない（−10kg/20年/3人/30分等）
 11. 冒頭に曖昧表現あり（「プロ級」「ある〇〇」「最新の〇〇」「神レベル」等）
 12. 「稼げる」「月◯万」等の直接的収益表現が含まれている
 13. マニアックなベンチマーク比較が含まれている（Kimi K2/Qwen3/Llama等）
@@ -178,8 +178,10 @@ def main():
             gh.update_pipeline_status(issue.number, "malfoy", "error")
             sys.exit(1)
 
-        # コードレベル禁止文字チェック（Gemini判断より優先）
-        forbidden_found = find_forbidden_chars(luna_posts)
+        # コードレベル禁止文字チェック（投稿本文のみ。コメントのMarkdown見出しは対象外）
+        slot_texts_pre = extract_all_slot_texts(luna_posts)
+        check_target = "\n".join(slot_texts_pre.values()) if slot_texts_pre else luna_posts
+        forbidden_found = find_forbidden_chars(check_target)
         if forbidden_found:
             chars_str = ' '.join(repr(c) for c in forbidden_found)
             logger.warning(f"禁止文字を検出: {chars_str} → 自動差し戻し")
