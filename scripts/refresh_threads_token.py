@@ -18,22 +18,33 @@ GITHUB_TOKEN         = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO          = os.getenv("GITHUB_REPO")
 
 
-def refresh_token(current_token: str) -> str:
+def refresh_token(current_token: str, max_retries: int = 3) -> str:
     """Threadsトークンをリフレッシュして新しいトークンを返す（有効期限60日に更新）"""
-    try:
-        r = requests.get("https://graph.threads.net/refresh_access_token", params={
-            "grant_type":   "th_refresh_token",
-            "access_token": current_token,
-        }, timeout=15)
-        r.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"トークンリフレッシュAPIリクエスト失敗") from e
-    data = r.json()
-    if "access_token" not in data:
-        raise ValueError("リフレッシュ失敗: レスポンスにaccess_tokenが含まれていません")
-    expires_days = data.get("expires_in", 0) // 86400
-    logger.info(f"トークンリフレッシュ成功 → 有効期限: {expires_days}日")
-    return data["access_token"]
+    last_err = None
+    for attempt in range(max_retries):
+        try:
+            r = requests.get("https://graph.threads.net/refresh_access_token", params={
+                "grant_type":   "th_refresh_token",
+                "access_token": current_token,
+            }, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+            if "access_token" not in data:
+                raise ValueError("リフレッシュ失敗: レスポンスにaccess_tokenが含まれていません")
+            expires_days = data.get("expires_in", 0) // 86400
+            logger.info(f"トークンリフレッシュ成功 → 有効期限: {expires_days}日")
+            return data["access_token"]
+        except requests.exceptions.RequestException as e:
+            last_err = e
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if attempt < max_retries - 1 and status in (500, 502, 503, 504, None):
+                wait = 10 * (attempt + 1)
+                logger.warning(f"リフレッシュ一時失敗 (attempt {attempt+1}/{max_retries}, status={status}) → {wait}s後リトライ")
+                import time
+                time.sleep(wait)
+                continue
+            break
+    raise RuntimeError("トークンリフレッシュAPIリクエスト失敗") from last_err
 
 
 def update_github_secret(new_token: str):

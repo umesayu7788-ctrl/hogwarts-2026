@@ -99,12 +99,29 @@ def create_threads_container(text: str, reply_to_id: str = None) -> str:
     }
     if reply_to_id:
         payload["reply_to_id"] = reply_to_id
-    resp = requests.post(url, data=payload, timeout=15)
-    resp.raise_for_status()
-    container_id = resp.json().get("id")
-    label = "返信コンテナ" if reply_to_id else "コンテナ"
-    logger.info(f"{label}作成成功: {container_id}")
-    return container_id
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = requests.post(url, data=payload, timeout=15)
+            if resp.status_code >= 500 and attempt < 2:
+                wait = 10 * (attempt + 1)
+                logger.warning(f"コンテナ作成 {resp.status_code}（attempt {attempt+1}/3）→ {wait}s待機")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            container_id = resp.json().get("id")
+            label = "返信コンテナ" if reply_to_id else "コンテナ"
+            logger.info(f"{label}作成成功: {container_id}")
+            return container_id
+        except requests.exceptions.RequestException as e:
+            last_err = e
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if attempt < 2 and status in (500, 502, 503, 504, None):
+                wait = 10 * (attempt + 1)
+                logger.warning(f"コンテナ作成一時失敗（attempt {attempt+1}/3）→ {wait}s待機")
+                time.sleep(wait)
+                continue
+            raise last_err if last_err else RuntimeError("container creation failed")
 
 
 def publish_threads_container(container_id: str) -> str:
