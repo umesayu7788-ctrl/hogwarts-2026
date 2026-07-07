@@ -21,7 +21,7 @@ tools: ['read', 'edit', 'search', 'web', 'execute', 'agent', 'todo']
 
 ### バズ投稿データ参照
 - `operation/knowledge/kb_sys_ref_v001.md` を読み込み、過去のバズ投稿パターンを把握する
-- GitHub Issues の投稿実績ログ（かみちゃんが記録したもの）を参照し、いいね数上位投稿の共通点を分析する
+- GitHub Issues の投稿実績ログ（大毅が記録したもの）を参照し、いいね数上位投稿の共通点を分析する
 
 ## ステップ②：分析（アナリスト）
 
