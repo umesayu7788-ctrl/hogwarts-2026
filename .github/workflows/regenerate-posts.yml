@@ -1,0 +1,66 @@
+name: Regenerate Posts (Luna + Malfoy)
+
+# 承認申請まで再生成（daily-cycle が失敗した日のリカバリ用）
+on:
+  workflow_dispatch:
+    inputs:
+      post_type:
+        description: '投稿タイプ (auto / affiliate / education / interest)'
+        required: false
+        default: 'auto'
+
+permissions:
+  issues: write
+  contents: read
+
+env:
+  DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Luna write + Malfoy review
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+        run: |
+          cd scripts
+          PT="${{ github.event.inputs.post_type }}"
+          if [ "$PT" = "auto" ] || [ -z "$PT" ]; then
+            JST_DOW=$(TZ=Asia/Tokyo date +%u)
+            if [ "$JST_DOW" = "2" ] || [ "$JST_DOW" = "5" ] || [ "$JST_DOW" = "6" ]; then
+              export POST_TYPE=affiliate
+              python affiliate_product_research.py || echo "product research warning"
+            elif [ "$JST_DOW" = "1" ] || [ "$JST_DOW" = "4" ]; then
+              export POST_TYPE=education
+            else
+              export POST_TYPE=interest
+            fi
+          else
+            export POST_TYPE="$PT"
+            if [ "$POST_TYPE" = "affiliate" ]; then
+              python affiliate_product_research.py || echo "product research warning"
+            fi
+          fi
+          echo "POST_TYPE=$POST_TYPE"
+          python luna_write.py --post-type "$POST_TYPE"
+          python malfoy_review.py

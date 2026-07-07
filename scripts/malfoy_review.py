@@ -72,6 +72,14 @@ def load_today_product() -> dict:
         return {}
 
 
+def _has_pr_marker(text: str) -> bool:
+    if re.search(r"(?im)^pr\s*$", text):
+        return True
+    if re.search(r"(?i)#pr", text):
+        return True
+    return any(tag in text for tag in ("【PR】", "[PR]"))
+
+
 def check_affiliate_slot3(slot3_text: str, product: dict) -> list[str]:
     """アフィリ日の SLOT_3 をコードレベルで検証"""
     issues: list[str] = []
@@ -82,7 +90,7 @@ def check_affiliate_slot3(slot3_text: str, product: dict) -> list[str]:
     parent, tree = parts[0], parts[1]
     if re.search(r"(?i)(?:^|\s)(?:#?pr|【pr】)", parent) or re.search(r"https?://", parent):
         issues.append("親投稿にPR表記またはURLがある（親は体験のみ）")
-    if not re.search(r"(?i)(?:^|\s)(?:#?pr|pr\s)", tree):
+    if not _has_pr_marker(tree):
         issues.append("ツリー1に pr 表記がない")
     url = (product.get("affiliate_url") or product.get("url", "")) if product else ""
     if url and url not in tree:

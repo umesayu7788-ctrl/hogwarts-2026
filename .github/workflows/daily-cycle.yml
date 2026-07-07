@@ -50,7 +50,7 @@ jobs:
             echo "No Issue found for today - running cycle."
           else
             HERMIONE_COMMENT=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
-              --jq '.[] | select(.body | contains("ハーマイオニーより")) | .body' 2>/dev/null | head -1 || echo "")
+              --jq '.[] | select(.body | contains("ブリーフィング")) | .body' 2>/dev/null | head -1 || echo "")
             if [ -n "$HERMIONE_COMMENT" ]; then
               echo "should_run=SKIP" >> "$GITHUB_OUTPUT"
               echo "Hermione already completed today's cycle - skipping."
