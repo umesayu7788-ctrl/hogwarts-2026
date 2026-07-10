@@ -125,6 +125,8 @@ def create_threads_container(text: str, reply_to_id: str = None) -> str:
                 logger.warning(f"コンテナ作成 {resp.status_code}（attempt {attempt+1}/3）→ {wait}s待機")
                 _time.sleep(wait)
                 continue
+            if not resp.ok:
+                logger.error(f"Threadsコンテナ作成失敗 status={resp.status_code} body={resp.text[:500]}")
             resp.raise_for_status()
             container_id = resp.json().get("id")
             label = "返信コンテナ" if reply_to_id else "コンテナ"
@@ -133,6 +135,9 @@ def create_threads_container(text: str, reply_to_id: str = None) -> str:
         except requests.exceptions.RequestException as e:
             last_err = e
             status = getattr(getattr(e, "response", None), "status_code", None)
+            body = getattr(getattr(e, "response", None), "text", "") or ""
+            if body:
+                logger.error(f"Threads API応答: {body[:500]}")
             if attempt < 2 and status in (500, 502, 503, 504, None):
                 wait = 10 * (attempt + 1)
                 logger.warning(f"コンテナ作成一時失敗（attempt {attempt+1}/3）→ {wait}s待機")
