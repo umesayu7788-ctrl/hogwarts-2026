@@ -52,4 +52,5 @@ jobs:
             echo "$GOOGLE_CREDENTIALS_JSON" > credentials/sheets_service_account.json
             export GOOGLE_CREDENTIALS_PATH=credentials/sheets_service_account.json
           fi
-          python scripts/ron_post.py
+          # コメントされたIssueを直接指定（日付またぎで当日Issueを誤参照しない）
+          python scripts/ron_post.py --issue-number ${{ github.event.issue.number }}

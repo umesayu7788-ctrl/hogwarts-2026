@@ -192,6 +192,8 @@ def main():
     parser.add_argument("--publish-container", default="",
                         help="指定したコンテナIDを公開する（--draftで作成済みの場合）")
     parser.add_argument("--check-approval", action="store_true", help="承認確認モード（後方互換）")
+    parser.add_argument("--issue-number", type=int, default=0,
+                        help="対象Issue番号（省略時は当日Issue。承認コメント起点の投稿で必須）")
     args = parser.parse_args()
 
     logger.info("=== ロン 投稿実行開始 ===")
@@ -207,8 +209,12 @@ def main():
         sys.exit(1)
     logger.info(auth_msg)
 
-    gh    = GitHubIssues(GITHUB_TOKEN, GITHUB_REPO)
-    issue = gh.get_or_create_today_issue()
+    gh = GitHubIssues(GITHUB_TOKEN, GITHUB_REPO)
+    if args.issue_number:
+        issue = gh.repo.get_issue(args.issue_number)
+        logger.info(f"指定Issueを使用: #{issue.number}")
+    else:
+        issue = gh.get_or_create_today_issue()
     gh.update_pipeline_status(issue.number, "ron_post", "running")
 
     # ── 既存コンテナを公開するモード ──────────────────
