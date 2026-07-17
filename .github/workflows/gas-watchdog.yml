@@ -72,36 +72,36 @@ jobs:
           pip install -q requests 2>/dev/null || true
 
           python3 - <<'PYEOF'
-import os, requests, datetime
+          import os, requests, datetime
 
-status = os.environ.get("STATUS", "unknown")
-repo = os.environ.get("REPO", "")
-webhook = os.environ.get("DISCORD_WEBHOOK_URL", "")
+          status = os.environ.get("STATUS", "unknown")
+          repo = os.environ.get("REPO", "")
+          webhook = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
-now_str = datetime.datetime.now().strftime("%H:%M JST")
-cause = "GAS未発火の可能性" if status == "no_issue" else "GASは発火したが照史（リサーチ）段階まで進んでいない"
+          now_str = datetime.datetime.now().strftime("%H:%M JST")
+          cause = "GAS未発火の可能性" if status == "no_issue" else "GASは発火したが照史（リサーチ）段階まで進んでいない"
 
-message = f"""🔴 **GAS Watchdog 警報** （{now_str} 検知）
-━━━━━━━━━━━━━━━━━━━━━
-## 🚦 今あなたがすること: ⏳ **待つだけ**（追加対応不要）
-━━━━━━━━━━━━━━━━━━━━━
+          message = f"""🔴 **GAS Watchdog 警報** （{now_str} 検知）
+          ━━━━━━━━━━━━━━━━━━━━━
+          ## 🚦 今あなたがすること: ⏳ **待つだけ**（追加対応不要）
+          ━━━━━━━━━━━━━━━━━━━━━
 
-⏰ 次の通知: 5〜10分後に通常の承認依頼通知が届きます
-✅ 8:15 JST 承認デッドライン: 余裕で間に合います
+          ⏰ 次の通知: 5〜10分後に通常の承認依頼通知が届きます
+          ✅ 8:15 JST 承認デッドライン: 余裕で間に合います
 
-📊 状況サマリ:
-  ・推定原因: {cause}
-  ・自動復旧: daily-cycle.yml を起動済み
+          📊 状況サマリ:
+            ・推定原因: {cause}
+            ・自動復旧: daily-cycle.yml を起動済み
 
-━━━━━━━━━━━━━━━━━━━━━
-## 📋 後で確認する場合
-━━━━━━━━━━━━━━━━━━━━━
-トラブルシュート手順書: operation/WATCHDOG_TROUBLESHOOTING.md を参照"""
+          ━━━━━━━━━━━━━━━━━━━━━
+          ## 📋 後で確認する場合
+          ━━━━━━━━━━━━━━━━━━━━━
+          トラブルシュート手順書: operation/WATCHDOG_TROUBLESHOOTING.md を参照"""
 
-if webhook:
-    try:
-        requests.post(webhook, json={"content": message}, timeout=10)
-        print("Discord通知送信完了")
-    except Exception as e:
-        print(f"Discord通知失敗: {e}")
-PYEOF
+          if webhook:
+              try:
+                  requests.post(webhook, json={"content": message}, timeout=10)
+                  print("Discord通知送信完了")
+              except Exception as e:
+                  print(f"Discord通知失敗: {e}")
+          PYEOF
