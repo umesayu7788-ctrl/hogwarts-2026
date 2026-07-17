@@ -61,5 +61,18 @@ new_token.txt
 # Nested project clone (contains separate .git and secrets)
 hogwarts-2026/
 
+# Quarantine area for reorganized files (may contain .env backups)
+_archive/
+
 # Distribution archives
 *.zip
+
+# U2 auth runtime (generated from DISCORD_USER_ID secret)
+auth_member.txt
+
+# Local workflow debug / draft artifacts
+operation/themes/_tmp_*.json
+operation/themes/_issue_*.md
+operation/themes/draft_*.md
+operation/themes/slot_pack_*.md
+operation/themes/theme_owner_ideas_*.md
