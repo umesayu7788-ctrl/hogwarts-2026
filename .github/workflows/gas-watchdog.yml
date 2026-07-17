@@ -35,21 +35,21 @@ jobs:
             echo "No issue found for today"
           else
             echo "issue_number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
-            HERMIONE_COMMENT=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
-              --jq '.[] | select(.body | contains("ハーマイオニーより")) | .body' 2>/dev/null | head -1 || echo "")
+            RESEARCH_COMMENT=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
+              --jq '.[] | select(.body | contains("ブリーフィング")) | .body' 2>/dev/null | head -1 || echo "")
 
-            if [ -n "$HERMIONE_COMMENT" ]; then
+            if [ -n "$RESEARCH_COMMENT" ]; then
               echo "status=ok" >> "$GITHUB_OUTPUT"
-              echo "Hermione already done - all good"
+              echo "Research briefing already done - all good"
             else
               echo "status=hermione_not_done" >> "$GITHUB_OUTPUT"
-              echo "Hermione not done yet - triggering recovery"
+              echo "Research briefing not done yet - triggering recovery"
             fi
           fi
 
       - name: All good - exit early
         if: steps.check_status.outputs.status == 'ok'
-        run: echo "All good - Hermione completed today's cycle"
+        run: echo "All good - today's research briefing completed"
 
       - name: Auto-recover - trigger daily-cycle
         if: steps.check_status.outputs.status != 'ok'
@@ -59,20 +59,17 @@ jobs:
           echo "Triggering daily-cycle recovery..."
           gh api "repos/${{ github.repository }}/actions/workflows/daily-cycle.yml/dispatches" \
             -X POST \
-            -f ref=master \
+            -f ref=main \
             -f inputs='{}' || echo "Failed to trigger daily-cycle"
 
       - name: Notify Discord - watchdog alert
         if: steps.check_status.outputs.status != 'ok'
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPO: ${{ github.repository }}
+          STATUS: ${{ steps.check_status.outputs.status }}
+          REPO: ${{ github.repository }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          pip install -q requests python-dotenv 2>/dev/null || true
-          STATUS="${{ steps.check_status.outputs.status }}"
-          REPO="${{ github.repository }}"
+          pip install -q requests 2>/dev/null || true
 
           python3 - <<'PYEOF'
 import os, requests, datetime
@@ -82,7 +79,7 @@ repo = os.environ.get("REPO", "")
 webhook = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
 now_str = datetime.datetime.now().strftime("%H:%M JST")
-cause = "GAS未発火の可能性" if status == "no_issue" else "GASは発火したがハーマイオニー段階まで進んでいない"
+cause = "GAS未発火の可能性" if status == "no_issue" else "GASは発火したが照史（リサーチ）段階まで進んでいない"
 
 message = f"""🔴 **GAS Watchdog 警報** （{now_str} 検知）
 ━━━━━━━━━━━━━━━━━━━━━
@@ -108,6 +105,3 @@ if webhook:
     except Exception as e:
         print(f"Discord通知失敗: {e}")
 PYEOF
-        env:
-          STATUS: ${{ steps.check_status.outputs.status }}
-          REPO: ${{ github.repository }}
