@@ -50,7 +50,7 @@ jobs:
             echo "No Issue found for today - running cycle."
           else
             HERMIONE_COMMENT=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
-              --jq '.[] | select(.body | contains("ブリーフィング")) | .body' 2>/dev/null | head -1 || echo "")
+              --jq '.[] | select(.body | contains("ハーマイオニーより")) | .body' 2>/dev/null | head -1 || echo "")
             if [ -n "$HERMIONE_COMMENT" ]; then
               echo "should_run=SKIP" >> "$GITHUB_OUTPUT"
               echo "Hermione already completed today's cycle - skipping."
@@ -77,26 +77,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
-          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
-          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
         run: |
           cd scripts
-          JST_DOW=$(TZ=Asia/Tokyo date +%u)
-          if [ "$JST_DOW" = "2" ] || [ "$JST_DOW" = "5" ] || [ "$JST_DOW" = "6" ]; then
-            export POST_TYPE=affiliate
-            echo "Affiliate day (DOW=$JST_DOW) — product research + affiliate SLOT_3"
-            python affiliate_product_research.py || echo "product research warning (continuing)"
-          elif [ "$JST_DOW" = "1" ] || [ "$JST_DOW" = "4" ]; then
-            export POST_TYPE=education
-          else
-            export POST_TYPE=interest
-          fi
           MAX_RETRY=2
           attempt=0
           while [ $attempt -le $MAX_RETRY ]; do
-            echo "=== Luna write attempt $((attempt+1))/$((MAX_RETRY+1)) (POST_TYPE=$POST_TYPE) ==="
-            python luna_write.py --post-type "$POST_TYPE"
+            echo "=== Luna write attempt $((attempt+1))/$((MAX_RETRY+1)) ==="
+            python luna_write.py
             echo "=== Malfoy review attempt $((attempt+1))/$((MAX_RETRY+1)) ==="
             set +e
             python malfoy_review.py

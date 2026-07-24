@@ -1,16 +1,52 @@
 """
-auth_check.py - 月次アクセストークン検証
+auth_check.py - 認証（U2 Discord在籍 ＋ 月次トークンの二重判定）
 scripts/utils/ に置いて、各メインスクリプトから呼び出す。
+
+U2: DISCORD_USER_ID が kit-auth Worker で「在籍中」なら認証OK。
+    そうでなければ従来の月次トークン(.key)で判定（移行期の二重判定）。
+    Worker障害・未設定時も旧トークン判定へフォールバック＝既存稼働を壊さない。
 """
 
+import os
 import re
+import json
+import urllib.parse
+import urllib.request
 from datetime import date
 from pathlib import Path
 
 
+# ── U2（Discord在籍チェック）設定（env優先・既定は本番kit-auth） ──────────
+_U2_ENDPOINT_DEFAULT = "https://kit-auth.8stn-y1010.workers.dev/"
+_U2_KIT_DEFAULT = "hog"
+
+
+def _u2_member_active() -> bool:
+    """DISCORD_USER_ID が在籍中か kit-auth Worker に確認。
+    未設定・非在籍・通信失敗のいずれも False（→ 旧月次トークン判定にフォールバック）。"""
+    uid = os.environ.get("DISCORD_USER_ID", "").strip()
+    if not uid:  # ローカル(始める)では auth_member.txt から取得
+        try:
+            uid = (Path(__file__).resolve().parent.parent.parent / "auth_member.txt").read_text(encoding="utf-8").strip()
+        except Exception:
+            uid = ""
+    if not uid:
+        return False
+    endpoint = os.environ.get("LM_AUTH_ENDPOINT", _U2_ENDPOINT_DEFAULT)
+    kit = os.environ.get("LM_AUTH_KIT", _U2_KIT_DEFAULT)
+    try:
+        sep = "&" if "?" in endpoint else "?"
+        url = endpoint + sep + urllib.parse.urlencode({"id": uid, "kit": kit})
+        req = urllib.request.Request(url, headers={"User-Agent": "lm-kit/1.0"})  # CloudflareがUA無しを403でブロックするため必須
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return bool(data.get("active"))
+    except Exception:
+        return False  # Worker障害等 → 旧トークン判定へ（fail-open・既存稼働を壊さない）
+
+
 # トークン形式: HOG-AUTH-YYYY-MM-[英数字8文字]
 # ランダム部分の末尾2文字はチェックサム（偽造検知用）
-# チェックサム生成: (YYYY + MM の各桁の合計) mod 36 を2桁の英数字に変換
 _CS_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
@@ -30,8 +66,14 @@ def _verify_checksum(token: str, year: int, month: int) -> bool:
 
 
 def check_auth() -> tuple[bool, str]:
-    """
-    operation/auth/ の .key ファイルを検証する。
+    """U2(Discord在籍)を優先。activeなら即OK。そうでなければ従来の月次トークン判定（二重判定）。"""
+    if _u2_member_active():
+        return True, "認証OK（Discord在籍 / U2）"
+    return _legacy_check_auth()
+
+
+def _legacy_check_auth() -> tuple[bool, str]:
+    """（従来）operation/auth/ の .key ファイルを検証する。
     Returns: (is_valid: bool, message: str)
     """
     script_dir = Path(__file__).resolve().parent.parent.parent
@@ -112,7 +154,6 @@ def check_auth() -> tuple[bool, str]:
         )
 
     # ── pack_ref と sys_ver の整合性チェック ─────────────────────────
-    # 月次更新パックを適用していない退会メンバーは、ここで停止する。
     pack_ref = kv.get("pack_ref", "")
     if pack_ref:
         sys_ver_lock = script_dir / "SYS_VER_LOCK.md"
