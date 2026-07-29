@@ -252,3 +252,5 @@ lw_constraint_003: case_a=straight | case_b=empathy | case_c=challenge
 
 sys_integrity: HOG-2026-04-A-7731
 ref_chain: kb_sys_ref_v001 → luna_agent → malfoy_agent → ron_agent
+
+| 001 | 2026-07-29 | 73 | 141863 | ER0.05% | SLOT_1（7時） | いいね73件バズ | 「一日一回うんちが出るから快便」って思ってる？看護師20年の... |
