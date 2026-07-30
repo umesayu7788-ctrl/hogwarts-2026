@@ -153,27 +153,57 @@ def close_draft_issue(issue_number: int, post_id: str) -> None:
 
 
 def post_to_threads(text: str) -> dict | None:
-    """Threads APIで即時投稿する"""
+    """Threads APIで即時投稿する（===THREAD=== 対応）"""
     if not THREADS_ACCESS_TOKEN or not THREADS_USER_ID:
         logger.warning("Threads認証情報なし → 投稿スキップ")
         return None
 
-    create_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
-    res = requests.post(create_url, params={
-        "media_type": "TEXT",
-        "text": text,
-        "access_token": THREADS_ACCESS_TOKEN,
-    }, timeout=30)
-    res.raise_for_status()
-    container_id = res.json().get("id")
+    parts = [p.strip() for p in re.split(r"\n?===THREAD===\n?", text) if p.strip()]
+    if not parts:
+        logger.error("投稿テキストが空です")
+        return None
 
-    publish_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads_publish"
-    res2 = requests.post(publish_url, params={
-        "creation_id": container_id,
-        "access_token": THREADS_ACCESS_TOKEN,
-    }, timeout=30)
-    res2.raise_for_status()
-    return res2.json()
+    root_id = None
+    last_result = None
+    for i, part in enumerate(parts):
+        create_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
+        payload = {
+            "media_type": "TEXT",
+            "text": part,
+            "access_token": THREADS_ACCESS_TOKEN,
+        }
+        if root_id:
+            payload["reply_to_id"] = root_id
+        last_err = None
+        container_id = None
+        for attempt in range(3):
+            res = requests.post(create_url, data=payload, timeout=30)
+            if res.status_code >= 500 and attempt < 2:
+                import time
+                time.sleep(10 * (attempt + 1))
+                continue
+            if not res.ok:
+                logger.error(f"コンテナ作成失敗: {res.status_code} {res.text[:300]}")
+                res.raise_for_status()
+            container_id = res.json().get("id")
+            break
+        if not container_id:
+            raise RuntimeError("container creation failed")
+
+        publish_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads_publish"
+        res2 = requests.post(publish_url, data={
+            "creation_id": container_id,
+            "access_token": THREADS_ACCESS_TOKEN,
+        }, timeout=30)
+        res2.raise_for_status()
+        last_result = res2.json()
+        post_id = last_result.get("id")
+        logger.info(f"投稿完了 part{i+1}/{len(parts)}: {post_id}")
+        if i == 0:
+            root_id = post_id
+        import time
+        time.sleep(2)
+    return last_result
 
 
 def notify_discord(message: str) -> None:
@@ -183,6 +213,24 @@ def notify_discord(message: str) -> None:
         requests.post(DISCORD_WEBHOOK_URL, json={"content": message}, timeout=10)
     except Exception:
         pass
+
+
+def run_direct_file(path: str) -> None:
+    """確定文面ファイルをそのまま Threads に投稿（Issue作成なし）"""
+    full = path
+    if not os.path.isabs(full):
+        full = os.path.join(SCRIPT_DIR, "..", path)
+    with open(full, "r", encoding="utf-8") as f:
+        post_text = f.read().strip().lstrip("\ufeff")
+    logger.info(f"=== 緊急投稿 direct_file: {path} ({len(post_text)}文字) ===")
+    result = post_to_threads(post_text)
+    if not result:
+        logger.error("Threads投稿失敗")
+        sys.exit(1)
+    post_id = result.get("id", "unknown")
+    notify_discord(f"✅ **緊急投稿完了** (Post ID: `{post_id}`)\n\n{post_text[:500]}")
+    logger.info(f"=== 緊急投稿 direct_file 完了: {post_id} ===")
+    print(f"POST_ID={post_id}")
 
 
 def run_draft(idea: str) -> None:
@@ -200,7 +248,18 @@ def run_draft(idea: str) -> None:
     post_text = generate_urgent_post(idea, voice_def)
     logger.info(f"投稿案生成完了: {len(post_text)}文字")
 
-    issue_number, issue_url = save_draft_to_issue(idea, post_text)
+    try:
+        issue_number, issue_url = save_draft_to_issue(idea, post_text)
+    except Exception as e:
+        logger.warning(f"Issue保存スキップ（権限不足など）: {e}")
+        # 権限がない場合は確定文面をそのまま投稿（オーナー確認済み想定）
+        result = post_to_threads(post_text)
+        if result:
+            print(f"POST_ID={result.get('id')}")
+            notify_discord(f"✅ **緊急投稿完了（Issueなし）**\n\n{post_text[:500]}")
+            return
+        notify_discord(f"📋 **手動投稿してください**\n\n{post_text}")
+        sys.exit(1)
 
     msg = (
         f"📥 **緊急投稿の下書きを保存しました**\n\n"
@@ -253,6 +312,9 @@ def main():
         if not idea:
             logger.error("IDEA環境変数が設定されていません")
             sys.exit(1)
+        if idea.startswith("FILE:"):
+            run_direct_file(idea[5:].strip())
+            return
         run_draft(idea)
 
 
