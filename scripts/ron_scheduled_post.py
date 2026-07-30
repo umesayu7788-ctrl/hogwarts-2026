@@ -158,19 +158,27 @@ def clean_post_text(text: str) -> str:
 def get_slot_text_from_issue(issue_number: int, gh: GitHubIssues, slot_num: int) -> str:
     """マルフォイの承認コメントから指定スロットのテキストを取得"""
     comments = gh.get_comments(issue_number)
+    invalid_markers = ("抽出失敗", "投稿済み・スキップ", "スキップ）")
     for comment in reversed(comments):
-        if f"{_n('malfoy')}より：承認申請" in comment.body:
-            # 推奨投稿案セクション以降のみ対象（レビュー結果のコードブロック誤検出を防止）
-            body = comment.body
-            marker = "推奨投稿案"
-            idx = body.find(marker)
-            if idx != -1:
-                body = body[idx:]
-            code_blocks = re.findall(r'```\n([\s\S]*?)\n```', body)
-            if len(code_blocks) >= slot_num:
-                text = clean_post_text(code_blocks[slot_num - 1])
-                if text:
-                    return text
+        if f"{_n('malfoy')}より：承認申請" not in comment.body:
+            continue
+        # 推奨投稿案セクション以降のみ対象（レビュー結果のコードブロック誤検出を防止）
+        body = comment.body
+        marker = "推奨投稿案"
+        idx = body.find(marker)
+        if idx != -1:
+            body = body[idx:]
+        code_blocks = re.findall(r"```\n([\s\S]*?)\n```", body)
+        if len(code_blocks) < slot_num:
+            continue
+        text = clean_post_text(code_blocks[slot_num - 1])
+        if not text:
+            continue
+        if any(m in text for m in invalid_markers):
+            continue
+        if len(text) < 40:
+            continue
+        return text
     return ""
 
 
@@ -223,13 +231,12 @@ def main():
         sys.exit(0)  # exit(0)=正常終了でcronを維持（exit(1)はGitHubがcronを自動無効化する）
 
     # Python側の投稿済みチェック（yml側チェックとの2重防止）
-    # yml側のgrepがコメント形式にマッチしない場合の保険
+    # 「18時」「21時」の文字列マッチだと、他SLOT本文に混入した見出しで誤スキップするため
+    # HTMLマーカー <!-- SLOT_N 投稿完了 --> のみを正式な完了判定にする
     slot_keyword = "18時" if args.slot == 2 else "21時"
+    done_marker = f"<!-- SLOT_{args.slot} 投稿完了 -->"
     comments_for_check = gh.get_comments(issue.number)
-    already_posted = any(
-        slot_keyword in c.body and "投稿完了" in c.body
-        for c in comments_for_check
-    )
+    already_posted = any(done_marker in c.body for c in comments_for_check)
     if already_posted:
         logger.info(f"SLOT_{args.slot}（{slot_keyword}）は既に投稿済みです。スキップします。")
         sys.exit(0)
