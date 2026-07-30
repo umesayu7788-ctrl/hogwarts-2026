@@ -191,17 +191,25 @@ def post_to_threads(text: str) -> dict | None:
             raise RuntimeError("container creation failed")
 
         publish_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads_publish"
-        res2 = requests.post(publish_url, data={
-            "creation_id": container_id,
-            "access_token": THREADS_ACCESS_TOKEN,
-        }, timeout=30)
-        res2.raise_for_status()
+        import time
+        for attempt in range(4):
+            res2 = requests.post(publish_url, data={
+                "creation_id": container_id,
+                "access_token": THREADS_ACCESS_TOKEN,
+            }, timeout=30)
+            if res2.status_code == 400 and attempt < 3:
+                logger.warning(f"公開400（attempt {attempt+1}/4）→ 待機してリトライ")
+                time.sleep(5 * (attempt + 1))
+                continue
+            if not res2.ok:
+                logger.error(f"公開失敗: {res2.status_code} {res2.text[:300]}")
+            res2.raise_for_status()
+            break
         last_result = res2.json()
         post_id = last_result.get("id")
         logger.info(f"投稿完了 part{i+1}/{len(parts)}: {post_id}")
         if i == 0:
             root_id = post_id
-        import time
         time.sleep(2)
     return last_result
 
