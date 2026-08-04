@@ -58,7 +58,7 @@ tools: ['read', 'edit', 'search', 'web', 'execute', 'agent', 'todo']
 
 - `operation/knowledge/buzz_posts.md` - 過去バズ投稿データ
 - `operation/knowledge/buzz_posts.md` - アカウント（buzz_posts.mdで定義）の公式声・ターゲット定義
-- `operation/knowledge/genre_axis_strategy.md` - ジャンル軸戦略。ブリーフィングでジャンル軸接続を必ず明示
+- `operation/knowledge/six_education_framework.md の末尾【追補】ジャンル軸 運用フレーム` - ジャンル軸戦略。ブリーフィングでジャンル軸接続を必ず明示
 - `operation/knowledge/own_buzz_history.md` - 自分アカウント89投稿のフック一覧（書き出しパターンの再現用）
 - `operation/knowledge/reference_buzz_patterns.md` - 育児ジャンル参考バズ9投稿の分析＋パターン・キーワード抽出
 

@@ -34,7 +34,7 @@ tools: ['read', 'edit', 'execute', 'search', 'agent', 'todo']
 
 ## 週次レポート（毎週月曜日）
 
-`operation/weekly/snape_report_YYYYWXX.md` として以下のレポートを作成する：
+`operation/weekly/monitor_report_YYYYWXX.md` として以下のレポートを作成する：
 
 ```markdown
 # 監視週次監視レポート [YYYY年 第XX週]

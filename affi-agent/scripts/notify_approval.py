@@ -65,7 +65,7 @@ def main():
     if DISCORD_WEBHOOK_URL:
         send_approval_request(
             DISCORD_WEBHOOK_URL,
-            {},  # ステータスはmalfoy_review.pyが既に送付済みのためここでは省略
+            {},  # ステータスはcontent_review.pyが既に送付済みのためここでは省略
             issue.number, issue.html_url,
             datetime.now().strftime("%Y-%m-%d"),
         )

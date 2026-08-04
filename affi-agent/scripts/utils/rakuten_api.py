@@ -47,7 +47,7 @@ def _do_request(endpoint: str, params: dict) -> tuple[dict, int, str]:
     新ポータル(2026-02以降)は許可ウェブサイトlistと一致するRefererヘッダーが必須。
     """
     headers = {
-        "Referer": "https://github.com/umesayu7788-ctrl/hogwarts-2026",
+        "Referer": "https://github.com/",
         "Origin": "https://github.com",
         "User-Agent": "Mozilla/5.0 (compatible; AffiAgent/1.0)",
     }

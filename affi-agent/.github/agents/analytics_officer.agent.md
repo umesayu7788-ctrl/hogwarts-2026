@@ -12,7 +12,7 @@ tools: ['read', 'edit', 'search', 'execute', 'agent', 'todo']
 1. `operation/knowledge/threads_affiliate_knowledge.md`
 2. `operation/knowledge/six_education_framework.md`
 3. `operation/knowledge/threads_rakuten_problems.md` — 重要指標（保存数・コメント数・プロフィール遷移）
-4. `operation/knowledge/genre_axis_strategy.md` — 投稿にジャンル軸接続文があったか記録。有無とCVRの相関を分析
+4. `operation/knowledge/six_education_framework.md の末尾【追補】ジャンル軸 運用フレーム` — 投稿にジャンル軸接続文があったか記録。有無とCVRの相関を分析
 
 ## ステップ①：データ取得
 

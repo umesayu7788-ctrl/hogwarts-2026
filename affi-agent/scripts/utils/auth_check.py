@@ -34,14 +34,26 @@ def _repo_root() -> Path:
 
 
 def _get_uid() -> str:
-    """DiscordユーザーIDを取得：GitHub Actions は env、ローカルは auth_member.txt。"""
+    """DiscordユーザーIDを取得：GitHub Actions は env、ローカルは auth_member.txt。
+    置き場所のゆれ・BOM・「ID: 123...」のような書き方でも拾えるようにする。"""
     uid = os.environ.get("DISCORD_USER_ID", "").strip()
     if uid:
-        return uid
-    try:
-        return (_repo_root() / "auth_member.txt").read_text(encoding="utf-8").strip()
-    except Exception:
-        return ""
+        m = re.search(r"\d{15,25}", uid)
+        return m.group(0) if m else ""
+    root = _repo_root()
+    for p in [root / "auth_member.txt",
+              Path.cwd() / "auth_member.txt",
+              root / "operation" / "auth_member.txt",
+              root / "operation" / "auth" / "auth_member.txt",
+              root / "scripts" / "auth_member.txt"]:
+        try:
+            text = p.read_text(encoding="utf-8-sig")  # BOM除去
+        except Exception:
+            continue
+        m = re.search(r"\d{15,25}", text)
+        if m:
+            return m.group(0)
+    return ""
 
 
 def _u2_member_active() -> bool:
@@ -63,7 +75,7 @@ def _u2_member_active() -> bool:
 
 
 def _checksum(year: int, month: int, body: str) -> str:
-    """独自チェックサム計算（AFFI 専用・ホグワーツ版とは異なる乗数・加数を使用）"""
+    """独自チェックサム計算（本キット専用の乗数・加数を使用）"""
     digit_sum = year + month
     for ch in body:
         digit_sum += CHARSET.index(ch)
@@ -109,10 +121,22 @@ def _kb_sys_ver() -> Optional[str]:
 
 
 def check_auth() -> Tuple[bool, str]:
-    """U2(Discord在籍)を優先。activeなら即OK。そうでなければ従来の月次トークン判定（二重判定）。"""
+    """U2(Discord在籍)を優先。activeなら即OK。そうでなければ従来の月次トークン判定（二重判定）。
+    どちらもNGなら、廃止済みの月次トークンではなく Discord ID の確認を案内する。"""
     if _u2_member_active():
         return True, "✅ 認証OK（Discord在籍 / U2）"
-    return _legacy_check_auth()
+    ok, msg = _legacy_check_auth()
+    if ok:
+        return True, msg
+    return False, (
+        "コミュニティ会員の確認ができませんでした。\n"
+        "次の2つを確認してください：\n"
+        "  1) キット直下の auth_member.txt に、あなたのDiscordユーザーID（数字だけ）が入っているか\n"
+        "     ※無ければ作成してください（Discordで自分のアイコンを右クリック→ユーザーIDをコピー）\n"
+        "  2) コミュニティのDiscordに参加中か\n"
+        "\n"
+        "※月次トークン（.keyファイル）は廃止しました。受け取る必要はありません。"
+    )
 
 
 def _legacy_check_auth() -> Tuple[bool, str]:

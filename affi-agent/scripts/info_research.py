@@ -1,5 +1,5 @@
 ﻿"""
-hermione_research.py
+info_research.py
 情報リサーチ担当: YouTube最新動画 + AIニュースRSSの情報収集スクリプト
 ステップ①②: リサーチ → 分析 → ブリーフィング生成
 """
@@ -541,15 +541,19 @@ def update_recycle_tracker(post_no: str, theme: str):
     logger.info(f"リサイクルトラッカー更新: {today}")
 
 
-def load_snape_insights() -> str:
+def load_monitor_insights() -> str:
     """
     監視の最新週次レポートから改善提案・注意事項を読み込み、
     情報リサーチのブリーフィングに自動反映するためのテキストを返す。
     レポートがなければ空文字を返す。
     """
     import glob as glob_mod
-    pattern = os.path.join(WEEKLY_DIR, "snape_report_*.md")
-    reports = sorted(glob_mod.glob(pattern))
+    # 週次レポートは過去にファイル名のプレフィックスを変えているため、`*_report_*.md` で
+    # 新旧どちらも拾う（過去分との連続性を切らない）。
+    # 単純な sorted() だとプレフィックス順に並んで「最新」を取り違えるので、
+    # プレフィックスを外した週キー（YYYYWXX）で並べる。
+    reports = glob_mod.glob(os.path.join(WEEKLY_DIR, "*_report_*.md"))
+    reports = sorted(reports, key=lambda p: os.path.basename(p).split("_report_", 1)[-1])
     if not reports:
         logger.info("監視週次レポートなし（初回 or 未生成）")
         return ""
@@ -589,7 +593,7 @@ def load_buzz_posts() -> str:
 
 def generate_briefing(videos: list, news: list, buzz_posts: str, theme: str,
                       performance: dict = None, recycle_candidate: dict = None,
-                      snape_insights: str = "", trends: list = None) -> str:
+                      monitor_insights: str = "", trends: list = None) -> str:
     """Gemini Flash でブリーフィングを生成する（タイムアウト・フォールバック付き）"""
 
     # Google Trendsデータのセクション
@@ -715,8 +719,8 @@ def generate_briefing(videos: list, news: list, buzz_posts: str, theme: str,
 {trends_section}
 {recycle_section}
 {f'''## 🔦 監視レポートからの改善指示（必ず反映すること）
-{snape_insights}
-''' if snape_insights else ''}
+{monitor_insights}
+''' if monitor_insights else ''}
 ## 過去のバズ投稿データ（抜粋）
 {buzz_posts[:2000]}
 
@@ -793,9 +797,9 @@ def main():
         buzz_posts = load_buzz_posts()
         performance = load_performance_summary()
         recycle_candidate = check_recycle_mode()
-        snape_insights = load_snape_insights()
+        monitor_insights = load_monitor_insights()
 
-        briefing = generate_briefing(videos, news, buzz_posts, args.theme, performance, recycle_candidate, snape_insights, trends)
+        briefing = generate_briefing(videos, news, buzz_posts, args.theme, performance, recycle_candidate, monitor_insights, trends)
         logger.info("ブリーフィング生成完了")
 
         comment_body = f"""## 🔍 情報リサーチより：リサーチ＆分析完了

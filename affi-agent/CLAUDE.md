@@ -94,7 +94,7 @@
 echo "..." > CLAUDE.md
 cat > .claude/settings.json << EOF
 sed -i 's/.../.../' SYS_VER_LOCK.md
-> operation/auth/access_AFFI-2026-04.key
+> scripts/utils/auth_check.py
 echo "..." >> operation/knowledge/kb_sys_ref_v001.md
 ```
 
@@ -136,7 +136,6 @@ echo "..." >> operation/knowledge/kb_sys_ref_v001.md
 | `operation/knowledge/affiliate_post_structure.md` | 参考アカウント構造分析（STEP 6 で記入）|
 | `operation/knowledge/product_purchase_rules.md` | 購入ルール（任意）|
 | `operation/knowledge/threads_affiliate_knowledge.md` | Threadsノウハウ（任意）|
-| `operation/knowledge/note_writing_guide.md` | 文章ガイド（任意・参照のみで可）|
 | `operation/config/genre_config.yaml` | ジャンル設定（STEP 5 で記入）|
 | `.env` | APIキー（STEP 3 で記入）|
 
@@ -189,7 +188,7 @@ echo "..." >> operation/knowledge/kb_sys_ref_v001.md
 
 1. APIキーは .env ファイルに記入し、絶対に外部共有しない
 2. GitHub リポジトリは「Private」設定にする
-3. 配布された .key ファイルは他人に渡さない
+3. `auth_member.txt` に記入するDiscordユーザーIDは自分のIDのみ使う（他人のIDを使わない・共有しない）
 
 「OK」と返答いただければセットアップを開始します。
 ```
@@ -203,19 +202,7 @@ echo "..." >> operation/knowledge/kb_sys_ref_v001.md
 2. `scripts/utils/auth_check.py` の `check_auth()` を呼び出す（Discord在籍を確認。**トークンや .key は不要**）。
 3. **在籍が確認できない場合：ハードストップ**（「コミュニティ会員（Discord在籍）が確認できませんでした」と伝え、続行しない）。
 
-※ 以降のステップ内に出てくる「.key / 月次トークン / 有効期限 / kb_update の expires / 更新パック取得」等は**旧仕様の記述**です。本キットは**在籍確認(U2)に置き換え済み**なので、トークン取得や有効期限切れの案内は行わず、上記の在籍確認だけで判定します（STEP 1 のコンテンツ有効期限チェックもスキップ）。
-
-### STEP 1: コンテンツパック有効期限確認
-
-`operation/knowledge/kb_sys_ref_v001.md` のフロントマターから `expires` を読み取り、今日と比較。
-**期限切れならハードストップ**：
-
-```
-⛔ コンテンツパックの有効期限が切れています
-
-最新の更新パック（kb_update_YYYYMM_*.md）が必要です。
-affi-agent のDiscordチャンネルから取得して「更新」コマンドで適用してください。
-```
+---
 
 ### STEP 2: .env ファイル確認
 
@@ -677,10 +664,10 @@ git push
 
 を自律実行する。「pushします」と一言表示してから実行。完了後「✅ ワークフローを GitHub に反映しました」と表示。
 
-### Step 2: キーファイルの自動検証
+### Step 2: 会員認証の自動確認（Discord在籍 / U2）
 
-`operation/auth/` 内の最新 `.key` ファイルを検証し、有効期限・pack_ref を表示する。
-キーがない・期限切れの場合は「Discord から今月のキーファイルを受け取り、`operation/auth/` にドラッグ＆ドロップしてください」と案内して停止。
+`scripts/utils/auth_check.py` の `check_auth()` を呼び出し、Discord在籍を確認する（**.key ファイルは廃止済み・検証しない**）。
+在籍が確認できない場合は `check_auth()` が返したメッセージをそのまま表示して停止（月次キーの受け取りを案内しない）。
 
 ### Step 3: 添付ファイルまたはプロジェクト内更新パックの振り分け
 
@@ -689,23 +676,25 @@ git push
 | `kb_update_YYYYMM_*.md` の添付 | `update_type` フィールドに応じて `kb_sys_ref_v001.md` を更新 |
 | `*.py` の添付 | `scripts/` 内の同名ファイルに上書き |
 | `updates/_DISPATCHER.md` または `updates/_UPDATE_DISPATCHER.md` がプロジェクト内に存在 | **マニフェスト型更新フローを自動実行**：`updates/_MANIFEST.md` を読み込み → 顧客の現状をヒアリング → 適用パッケージを提案 → 承認後に対話適用 → `updates/_APPLIED.md` に記録 |
-| 上記いずれにも該当しない | 「現在適用できる更新パックが見つかりません。Discord から最新の更新ファイルを受け取ってください」と表示 |
+| 上記いずれにも該当しない | 「現在適用できる更新はありません。保護ナレッジは実行のたびに自動で最新版が取得されるので、通常は何もしなくてOKです」と表示 |
 
 ### 完了時
 
-変更内容のサマリーを表示（更新されたファイル一覧・キー有効期限・次回更新予定）。
+変更内容のサマリーを表示（更新されたファイル一覧・認証状態・次回更新予定）。
 
 ---
 
-### 💡 顧客向け毎月の操作（「更新」コマンドの前提）
+### 💡 顧客側の更新作業について（原則ゼロ・U2方式）
 
-管理者から配布される以下2点を Claude Code のファイルパネルにドラッグ＆ドロップした後、チャットに「更新」と入力するだけで完了：
+このキットの保護ナレッジ（心理誘導・楽天ルール・6つの教育）は、ワークフロー実行のたびに
+`lm-fetch.js` が認証サーバー（KV）から**最新版を自動取得**します。
+管理者側がナレッジを更新すると次回実行から自動で反映されるため、
+**毎月の「更新パック」受け取り・適用作業はありません**。
 
-1. **キーファイル**（`access_AFFI-YYYY-MM.key`）→ `operation/auth/` にドロップ
-2. **更新ZIPの展開フォルダ内 `updates/` フォルダ** → プロジェクトの一番上の階層にドロップ（上書き）
+※ 月次のキーファイル（.key）も**廃止**しました。認証はDiscord在籍確認（U2）のみなので、毎月の受け取りは不要です。
 
-※初回セットアップ時および管理者から案内があった月のみ：
-3. **展開フォルダ内 `.github/workflows/` フォルダ** → プロジェクトの `.github/workflows/` にドロップ（上書き）→「更新」入力で自動 push
+※ スクリプトやワークフロー本体に修正が必要な場合のみ、管理者から個別に更新ファイルが案内されます。
+　 その場合は案内に従って該当フォルダにドロップ（上書き）し、チャットに「更新」と入力してください。
 
 ---
 
@@ -720,14 +709,13 @@ git push
 - Python 仮想環境（.venv）のセットアップ・不足パッケージの追加インストール
 - エラー発生時の原因分析・修正・再実行（最大8回）
 - `scripts/` 内の Python スクリプト更新（更新パック適用時）
-- 認証トークンの検証・有効期限表示
+- 会員認証（Discord在籍確認）の実行・結果表示
 - `git init` → `git add` → `git commit` → `git push` の自動実行（STEP 3.5）
 
 ### ユーザーに操作を依頼するケース（最小限・これ以外は自律実行）
 
 - API キーの**新規取得・再発行**（外部サービスへのログインが必要なため）
 - GitHub Secrets の**ブラウザ上での更新**（ブラウザ操作が必要なため）
-- `.key` ファイルの Codespaces への**手動アップロード**（保護設定により Claude での書き込みが不可なため）
 - `.github/workflows/` への yml ファイルの**手動アップロード**（保護設定により Claude での書き込みが不可なため）
 - 8回の自律解消サイクルを経ても解決しなかった問題（このケースは稀）
 
@@ -755,7 +743,7 @@ git push
 **人間操作が必要なケース（最小限）：**
 - API キー再取得（外部サービスへのログインが必須）
 - GitHub Secrets の更新（ブラウザ上の操作が必要）
-- ファイルの手動アップロード（`.key` / `.yml` を Codespaces のファイルエクスプローラーで配置）
+- ファイルの手動アップロード（`.yml` を Codespaces のファイルエクスプローラーで配置）
 - 8サイクル経過しても未解決の場合（このケースのみユーザーへ平易な日本語で報告）
 
 ---
@@ -763,7 +751,7 @@ git push
 ## 📜 サポート・問い合わせ
 
 - 問題が起きたら：affi-agent コミュニティチャンネルへ
-- トークンが届かない：管理者にDM
+- 認証（Discord在籍確認）が通らない：管理者にDM
 - バグレポート：GitHub Issue
 
 ---

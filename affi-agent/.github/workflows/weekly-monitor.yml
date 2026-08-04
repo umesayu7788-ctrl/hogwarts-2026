@@ -44,5 +44,5 @@ jobs:
           git config --local user.email "monitor@affiliate-agents.bot"
           git config --local user.name "Monitor (Agent)"
           git add operation/weekly/
-          git diff --staged --quiet || git commit -m "📊 Snape週次レポート: $(date '+%Y年W%V')"
+          git diff --staged --quiet || git commit -m "📊 監視週次レポート: $(date '+%Y年W%V')"
           git push

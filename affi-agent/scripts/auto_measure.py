@@ -1,5 +1,5 @@
 ﻿"""
-ron_auto_measure.py
+auto_measure.py
 投稿・計測担当: 前日の全投稿エンゲージメントを自動計測するスクリプト
 
 毎日22:00 JST に auto-measure.yml から自動実行される。
@@ -40,6 +40,7 @@ import requests
 from datetime import datetime, timedelta, timezone
 from utils.github_issues import GitHubIssues
 from utils.sheets_logger import update_engagement
+from utils.textfile import read_keep_eol, write_keep_eol
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -68,11 +69,6 @@ MIN_VIEWS_FOR_ER_BUZZ    = 500   # ER基準大バズの最低閲覧数
 GOOD_VIEWS_THRESHOLD     = 1000  # 閲覧数「好調」
 LOW_VIEWS_THRESHOLD      = 800   # 閲覧数「要改善」
 FOLLOWER_GROWTH_THRESHOLD = 10   # フォロワー増加「成長日」閾値
-
-# ── note展開候補の閾値 ──
-NOTE_CANDIDATE_VIEWS     = 1000  # 閲覧数がこれ以上ならnote候補
-NOTE_CANDIDATE_LIKES     = 10   # いいね数がこれ以上ならnote候補
-NOTE_DRAFTS_DIR = os.path.join(SCRIPT_DIR, "..", "operation", "note_drafts")
 
 
 def fetch_post_insights(post_id: str, max_retries: int = 2) -> dict:
@@ -325,8 +321,10 @@ def save_knowledge(post_text: str, likes: int, views: int, er: float,
                    date_str: str, slot_label: str, reason: str, follower_diff: int | None):
     """成果投稿をbuzz_posts.mdにナレッジとして追記する"""
     try:
-        with open(BUZZ_POSTS_PATH, "r", encoding="utf-8") as f:
-            content = f.read()
+        # ⚠️ 改行コードは utils.textfile に集約してある。ここで open() し直さないこと。
+        #    テキストモードで読み書きすると、1行足すだけでファイル全体が書き換わる
+        #    （gitのautocrlfが差分を吸収するので誰も気づかない）。
+        content, eol = read_keep_eol(BUZZ_POSTS_PATH)
 
         existing_posts = content.count("| No.")
         new_no = existing_posts
@@ -348,116 +346,11 @@ def save_knowledge(post_text: str, likes: int, views: int, er: float,
         else:
             updated_content = content + f"\n{new_row}"
 
-        with open(BUZZ_POSTS_PATH, "w", encoding="utf-8") as f:
-            f.write(updated_content)
+        write_keep_eol(BUZZ_POSTS_PATH, updated_content, eol)
 
         logger.info(f"📚 ナレッジ保管: {slot_label} ({reason}) → buzz_posts.md")
     except FileNotFoundError:
         logger.warning(f"{BUZZ_POSTS_PATH} が見つかりません")
-
-
-def is_note_candidate(likes: int, views: int) -> bool:
-    """投稿がnote記事への展開候補かどうかを判定する"""
-    return views >= NOTE_CANDIDATE_VIEWS or likes >= NOTE_CANDIDATE_LIKES
-
-
-def generate_note_outline(post_text: str, likes: int, views: int, er: float,
-                          date_str: str, slot_label: str) -> str:
-    """
-    伸びた投稿からnote記事の骨子（アウトライン）を自動生成する。
-    Gemini APIで生成。API未設定なら簡易テンプレートで代替。
-    """
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-    prompt = f"""以下のThreads投稿が大きく伸びました。この投稿テーマを深掘りした
-note記事の骨子（アウトライン）を作成してください。
-
-【元の投稿テキスト】
-{post_text}
-
-【実績データ】
-- 日付: {date_str} / {slot_label}
-- 閲覧数: {views:,}
-- いいね: {likes}
-- エンゲージメント率: {er}%
-
-【重要ルール】
-- 著者「出木杉」の一人称視点で、実体験として語る構成にする
-- note記事は「体験記・思考録」として書く。HOW TO（具体的な手順解説）は絶対に書かない
-- テンプレートの中身・実装手順・コード・設定方法は一切含めない
-- 読者がこの記事だけで100%満足できる、完結した内容にする
-- 「続きはコミュニティで」「詳しくはこちら」のような外部誘導は入れない
-- 想定文字数: 3,000〜5,000字
-
-【出力ルール】
-- 各章の「書くべき内容の要点」には、読者が読む本文の方向性だけを書く
-- 「〜は書かない」「〜に注意」等のメタ指示・制作ノートは含めない
-- 設定方法・インストール手順・コード例は章の要点にも含めない
-
-【出力フォーマット】
-タイトル案: （3案）
-想定読者: （1文）
-感情の流れ: （読者が記事を通じて感じる感情の変化）
-
-■ 導入（400字）
-- 書くべき内容の要点
-
-■ 第1章「（章タイトル）」（800字）
-- 書くべき内容の要点
-
-■ 第2章「（章タイトル）」（800字）
-- 書くべき内容の要点
-
-■ 第3章「（章タイトル）」（800字）
-- 書くべき内容の要点（実績データ: 閲覧{views:,}等をここで活用）
-
-■ 結び（400字）
-- 書くべき内容の要点（読後感「面白かった・やってみたい」で終わる）
-"""
-
-    if GEMINI_API_KEY:
-        try:
-            from utils.gemini_client import call_gemini
-            outline = call_gemini(prompt, GEMINI_API_KEY)
-            return outline
-        except Exception as e:
-            logger.warning(f"Geminiでのnote骨子生成に失敗: {e}")
-
-    # フォールバック: 簡易テンプレート
-    return f"""# note記事候補 — 骨子（自動生成）
-
-## 元投稿（{date_str} {slot_label}）
-{post_text}
-
-## 実績
-- 閲覧: {views:,} / いいね: {likes} / ER: {er}%
-
-## タイトル案
-1. （要検討）
-2. （要検討）
-3. （要検討）
-
-## 構成案
-- 導入: この投稿のテーマに至った背景・きっかけ
-- 第1章: 投稿で触れた課題の深掘り
-- 第2章: 自分の体験・試行錯誤
-- 第3章: 結果と気づき（実績データを活用）
-- 結び: 読後感「面白かった」で終わる
-"""
-
-
-def save_note_draft(outline: str, date_str: str, slot_label: str) -> str:
-    """note骨子をファイルに保存する。保存パスを返す。"""
-    os.makedirs(NOTE_DRAFTS_DIR, exist_ok=True)
-    safe_slot = slot_label.replace("（", "_").replace("）", "").replace(" ", "")
-    filename = f"note_draft_{date_str}_{safe_slot}.md"
-    filepath = os.path.join(NOTE_DRAFTS_DIR, filename)
-
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(outline)
-
-    logger.info(f"📝 note骨子を保存: {filename}")
-    return filepath
 
 
 def main():
@@ -760,41 +653,6 @@ def main():
             report_lines.append(
                 f"  → フック「{s3_hook}」×フォーマット「{s3_fmt}」は不採用。次回は別の組み合わせを実験"
             )
-        report_lines.append("")
-
-    # ── note展開候補の検出 + 骨子生成 ──
-    note_candidates = []
-    for post_id, slot_num, post_text, data in results:
-        if data is None or not post_text:
-            continue
-        likes = data["likes"]
-        views = data["views"]
-        if is_note_candidate(likes, views):
-            er = round(likes / views * 100, 2) if views > 0 else 0
-            label = slot_labels.get(slot_num, f"SLOT_{slot_num}")
-            note_candidates.append((post_text, likes, views, er, label))
-
-    if note_candidates:
-        report_lines.append("### 📝 note記事 展開候補")
-        report_lines.append("")
-        report_lines.append(
-            f"以下の **{len(note_candidates)}件** の投稿はnote記事への展開候補です"
-            f"（閲覧{NOTE_CANDIDATE_VIEWS:,}以上 or いいね{NOTE_CANDIDATE_LIKES}以上）。"
-        )
-        report_lines.append("骨子（アウトライン）を自動生成し、`operation/note_drafts/` に保存しました。")
-        report_lines.append("")
-
-        for post_text, likes, views, er, label in note_candidates:
-            # 骨子を生成・保存
-            outline = generate_note_outline(post_text, likes, views, er, target_date, label)
-            saved_path = save_note_draft(outline, target_date, label)
-
-            report_lines.append(f"**{label}** — 閲覧**{views:,}** / いいね**{likes}**")
-            report_lines.append(f"> {post_text[:100]}...")
-            report_lines.append(f"→ 骨子保存先: `{os.path.basename(saved_path)}`")
-            report_lines.append("")
-
-        report_lines.append("*骨子を元に、別途note記事として仕上げてください。*")
         report_lines.append("")
 
     comment_body = "\n".join(report_lines)

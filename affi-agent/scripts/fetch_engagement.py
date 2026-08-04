@@ -1,5 +1,5 @@
 ﻿"""
-ron_fetch.py
+fetch_engagement.py
 投稿・計測担当: Threads投稿のエンゲージメント計測スクリプト
 ステップ⑥: 投稿24時間後に自動実行 → データ取得 → GitHub Issues記録 → バズ判定
 """
@@ -25,6 +25,7 @@ import requests
 from datetime import datetime
 from utils.github_issues import GitHubIssues
 from utils.sheets_logger import update_engagement
+from utils.textfile import read_keep_eol, write_keep_eol
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -126,8 +127,10 @@ def update_buzz_posts(post_text: str, likes: int, date_str: str, theme: str):
         return
 
     try:
-        with open(BUZZ_POSTS_PATH, "r", encoding="utf-8") as f:
-            content = f.read()
+        # ⚠️ 改行コードは utils.textfile に集約してある。ここで open() し直さないこと。
+        #    テキストモードで読み書きすると、1行足すだけでファイル全体が書き換わる
+        #    （gitのautocrlfが差分を吸収するので誰も気づかない）。
+        content, eol = read_keep_eol(BUZZ_POSTS_PATH)
 
         # 通算No.を計算（既存の行数から）
         existing_posts = content.count("| No.")
@@ -146,8 +149,7 @@ def update_buzz_posts(post_text: str, likes: int, date_str: str, theme: str):
         else:
             updated_content = content + f"\n{new_row}"
 
-        with open(BUZZ_POSTS_PATH, "w", encoding="utf-8") as f:
-            f.write(updated_content)
+        write_keep_eol(BUZZ_POSTS_PATH, updated_content, eol)
 
         logger.info(f"🎉 バズ投稿として buzz_posts.md に追記しました (いいね: {likes})")
 

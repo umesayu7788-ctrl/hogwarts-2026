@@ -77,7 +77,7 @@ jobs:
             exit 0
           fi
           # Issueの存在ではなく「ライター生成済みか（=承認申請コメントあり）」で判定
-          # 監視・スネイプが先にIssueを作成しても、実コンテンツ未生成なら走らせる
+          # 監視が先にIssueを作成しても、実コンテンツ未生成なら走らせる
           ISSUE_NUM=$(gh api "repos/${{ github.repository }}/issues?labels=daily-operation&state=all&per_page=5" --jq ".[] | select(.title | contains(\"$TODAY\")) | .number" 2>/dev/null | head -1)
           if [ -z "$ISSUE_NUM" ]; then
             echo "No issue for $TODAY → run"

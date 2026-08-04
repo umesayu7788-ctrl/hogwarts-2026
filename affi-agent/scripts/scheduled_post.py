@@ -1,5 +1,5 @@
 ﻿"""
-ron_scheduled_post.py
+scheduled_post.py
 投稿・計測担当: スケジュール投稿（18時・21時）
 GitHub Issueの校閲承認コメントから該当スロットのテキストを取得して投稿する
 GitHub Actions cron で自動実行される。

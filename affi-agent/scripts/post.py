@@ -1,5 +1,5 @@
 ﻿"""
-ron_post.py
+post.py
 投稿・計測担当: Threads APIへの投稿実行スクリプト
 ステップ⑤: 人間の承認確認 → Threads投稿（または下書き保存） → 結果記録
 
@@ -220,7 +220,7 @@ def main():
 
     gh    = GitHubIssues(GITHUB_TOKEN, GITHUB_REPO)
     issue = gh.get_or_create_today_issue()
-    gh.update_pipeline_status(issue.number, "ron_post", "running")
+    gh.update_pipeline_status(issue.number, "poster", "running")
 
     # ── 既存コンテナを公開するモード ──────────────────
     if args.publish_container:
@@ -234,7 +234,7 @@ def main():
 **投稿ID:** `{post_id}`
 **ステータス:** 投稿成功
 """)
-        gh.update_pipeline_status(issue.number, "ron_post", "done")
+        gh.update_pipeline_status(issue.number, "poster", "done")
         gh.update_pipeline_status(issue.number, "human",    "done")
         print(f"POST_ID={post_id}")
         print(f"ISSUE_NUMBER={issue.number}")
@@ -244,7 +244,7 @@ def main():
     approved, slot_texts = check_human_approval(issue.number, gh)
     if not approved:
         logger.error("人間の承認なしに投稿を実行することはできません。処理を終了します。")
-        gh.update_pipeline_status(issue.number, "ron_post", "waiting")
+        gh.update_pipeline_status(issue.number, "poster", "waiting")
         sys.exit(1)
 
     gh.update_pipeline_status(issue.number, "human", "done")
@@ -315,7 +315,7 @@ python scripts/post.py --publish-container {container_id}
 または GitHub Actions `post-to-threads` ワークフローを手動実行してください。
 """
         gh.add_comment(issue.number, comment_body)
-        gh.update_pipeline_status(issue.number, "ron_post", "pending")
+        gh.update_pipeline_status(issue.number, "poster", "pending")
         logger.info(f"下書きコンテナを作成しました: {container_id}")
         logger.info("=== 投稿・計測 下書き保存完了 ===")
         print(f"CONTAINER_ID={container_id}")
@@ -368,7 +368,7 @@ python scripts/post.py --publish-container {container_id}
 """
     done_ts = datetime.now().strftime("%H:%M")
     gh.add_comment(issue.number, comment_body)
-    gh.update_pipeline_status(issue.number, "ron_post", "done", done_ts)
+    gh.update_pipeline_status(issue.number, "poster", "done", done_ts)
     # Google Sheets に記録（SLOT_1）
     log_post(SPREADSHEET_ID, GOOGLE_CREDENTIALS_PATH,
              slot=1, post_text=post_text, post_id=post_id, issue_number=issue.number)

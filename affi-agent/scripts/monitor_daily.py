@@ -1,5 +1,5 @@
 ﻿"""
-snape_daily.py
+monitor_daily.py
 監視担当：日次監視官
 
 責務:
@@ -12,7 +12,6 @@ snape_daily.py
 
 実行タイミング: daily-cycle.yml の各ステップ後、またはスタンドア投稿・計測で
 """
-
 
 # ========== AFFI 認証チェック（編集禁止・自動挿入） ==========
 import sys as _affi_sys
@@ -28,13 +27,14 @@ except ImportError:
     print("⛔ auth_check モジュールが見つかりません。配布物が破損している可能性があります。")
     _affi_sys.exit(1)
 # ========== END 認証チェック ==========
+
 import os
 import json
 import re
 import sys
 import requests
 from datetime import datetime, timezone, timedelta
-from google import genai
+from utils.gemini_client import call_gemini
 from utils.github_issues import GitHubIssues, PIPELINE_STEPS
 from utils.discord_notify import send_board
 from utils.sheets_logger import _get_client, _PROJECT_ROOT, GSPREAD_AVAILABLE
@@ -42,6 +42,25 @@ from dotenv import load_dotenv
 from loguru import logger
 
 load_dotenv()
+
+# ── 時刻の基準（2026-07-30 修正）──────────────────────────────────────────
+# monitor-daily.yml の cron は `13 23 * * *` ＝ **23:13 UTC ＝ 翌 08:13 JST**。
+# つまり「UTCの日付」と「運用上の日付(JST)」が**必ず1日ズレる**時間帯に動く。
+# 旧実装は `datetime.now()`（Actionsランナーでは UTC の壁時計）で日付・曜日を作って
+# いたため、フォロワー推移シートの「日付」「曜日」が **毎回JSTの前日**で記録されていた。
+# 同じフォロワー数を auto-measure.yml は `date -u -d '+9 hours'`（＝JST・正しい）で
+# followers_count.json に書いており、**同一データが2系統で1日食い違っていた**。
+#
+# ⚠️ 「経過時間」の計算だけは JST にしてはいけない（check_pipeline_health）。
+#    GitHub の issue.created_at は UTC なので、差を取るときは UTC 同士で揃える。
+#    カレンダー上の「日付・曜日」＝JST／「経過時間」＝UTC同士、と使い分ける。
+JST = timezone(timedelta(hours=9))
+
+
+def now_jst() -> datetime:
+    """運用上の「今」（JST）。日付・曜日の判断は必ずこれを通す。"""
+    return datetime.now(JST)
+
 
 GEMINI_API_KEY       = os.getenv("GEMINI_API_KEY")
 GITHUB_TOKEN         = os.getenv("GITHUB_TOKEN")
@@ -51,8 +70,13 @@ THREADS_ACCESS_TOKEN = os.getenv("THREADS_ACCESS_TOKEN")
 THREADS_USER_ID      = os.getenv("THREADS_USER_ID")
 SPREADSHEET_ID       = os.getenv("SPREADSHEET_ID", "")
 GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials/sheets_service_account.json")
-GEMINI_MODEL         = "gemini-2.5-flash"
 THREADS_API_BASE     = "https://graph.threads.net/v1.0"
+
+# ⚠️ Gemini のモデル名をここに持たない（2026-08-01 修正）。
+#    以前は GEMINI_MODEL = "gemini-2.5-flash" を直書きして genai.Client を
+#    素で叩いていたため、そのモデルの日次無料枠(limit:20)が切れた瞬間に
+#    429 で即死し、**作り終えた監視レポートごと捨てて**落ちていた。
+#    モデル選択・フォールバック・タイムアウトは utils/gemini_client.call_gemini に一元化する。
 
 SCRIPT_DIR          = os.path.dirname(os.path.abspath(__file__))
 BUZZ_POSTS_PATH     = os.path.join(SCRIPT_DIR, "..", "operation", "knowledge", "buzz_posts.md")
@@ -63,8 +87,8 @@ TIMEOUT_MINUTES = {
     "writer":     10,   # ライティングは10分以内
     "reviewer":   10,   # 校閲は10分以内
     "human":   120,   # 人間承認は2時間まで待つ
-    "ron_post":  5,   # 投稿は5分以内
-    "ron_fetch": 5,   # 計測は5分以内
+    "poster":  5,   # 投稿は5分以内
+    "poster_fetch": 5,   # 計測は5分以内
 }
 
 # ── スコア閾値 ──────────────────────────────────────
@@ -107,7 +131,7 @@ def extract_briefing(comments: list) -> str:
     return ""
 
 
-def extract_luna_posts(comments: list) -> str:
+def extract_writer_posts(comments: list) -> str:
     """ライターの投稿案3案を抽出"""
     for c in reversed(comments):
         if "ライターより" in c.body and "投稿案3案" in c.body:
@@ -290,7 +314,9 @@ def log_follower_count(count: int) -> bool:
             except (ValueError, IndexError):
                 pass
 
-        now = datetime.now()
+        # ⚠️ 日付・曜日は必ず JST（旧実装は datetime.now() ＝ UTC で、08:13 JST 発火の
+        #    ため記録が毎回「前日」になっていた。auto-measure.yml 側が正）。
+        now = now_jst()
         weekdays = ["月", "火", "水", "木", "金", "土", "日"]
         diff = (count - prev_count) if prev_count is not None else 0
         diff_str = f"+{diff}" if diff >= 0 else str(diff)
@@ -318,10 +344,15 @@ def check_pipeline_health(issue, statuses: dict) -> list[dict]:
     戻り値: [{"step": key, "problem": str, "action": str}, ...]
     """
     issues_found = []
-    now = datetime.now()
+    # ⚠️ ここは「経過時間」なので **JSTにしてはいけない**（JSTのnowとUTCのcreated_atを
+    #    引くと9時間ぶん余計に経過したことになり、全ステップが即タイムアウト判定になる）。
+    #    差を取る両辺を aware UTC で揃える。経過時間の計算はタイムゾーンに依存しない。
+    now = datetime.now(timezone.utc)
 
     # Issue作成時刻を基準に経過時間を推定
-    created_at = issue.created_at.replace(tzinfo=None) if issue.created_at else now
+    created_at = issue.created_at if issue.created_at else now
+    if created_at.tzinfo is None:      # PyGithub のバージョンによって naive UTC が来る
+        created_at = created_at.replace(tzinfo=timezone.utc)
 
     for key, label, agent in PIPELINE_STEPS:
         s, ts = statuses.get(key, ("waiting", "-"))
@@ -371,7 +402,7 @@ def three_pass_quality_check(
     post_text: str,
     briefing: str,
     buzz_voice: str,
-    luna_posts: str,
+    writer_posts: str,
 ) -> dict:
     """
     3回の深層思考でライターの投稿案を徹底検証する。
@@ -391,8 +422,6 @@ def three_pass_quality_check(
         "risk_flags": list,    # 要注意リスト
     }
     """
-    client = genai.Client(api_key=GEMINI_API_KEY)
-
     # ── PASS 1: 徹底批評 ──────────────────────────────
     prompt_p1 = f"""
 あなたは投稿品質の「批評官監視」です。感情なく、合理的に問題点を全て列挙してください。
@@ -430,7 +459,7 @@ def three_pass_quality_check(
 最後に: 最も致命的な問題を1つだけ選んで「最重要問題点:」として記載せよ。
 """
     logger.info("Monitor 3パス検証: Pass 1（批評）実行中")
-    pass1 = client.models.generate_content(model=GEMINI_MODEL, contents=prompt_p1).text
+    pass1 = call_gemini(prompt_p1, GEMINI_API_KEY)
 
     # ── PASS 2: 擁護・反論 ────────────────────────────
     prompt_p2 = f"""
@@ -461,7 +490,7 @@ def three_pass_quality_check(
 最後に: 「この投稿案が合格に値する理由を1文で」記載せよ。
 """
     logger.info("Monitor 3パス検証: Pass 2（擁護）実行中")
-    pass2 = client.models.generate_content(model=GEMINI_MODEL, contents=prompt_p2).text
+    pass2 = call_gemini(prompt_p2, GEMINI_API_KEY)
 
     # ── PASS 3: 統合・最終判定 ────────────────────────
     prompt_p3 = f"""
@@ -509,7 +538,7 @@ def three_pass_quality_check(
 監視の総評（1〜2文）:
 """
     logger.info("Monitor 3パス検証: Pass 3（統合判定）実行中")
-    pass3 = client.models.generate_content(model=GEMINI_MODEL, contents=prompt_p3).text
+    pass3 = call_gemini(prompt_p3, GEMINI_API_KEY)
 
     # スコアと判定を解析
     score_match = re.search(r"総合スコア[：:]\s*(\d+)", pass3)
@@ -541,10 +570,8 @@ def three_pass_quality_check(
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 3. 整合性検証
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def check_consistency(post_text: str, briefing: str, luna_posts: str) -> dict:
+def check_consistency(post_text: str, briefing: str, writer_posts: str) -> dict:
     """ブリーフィング→投稿案の一貫性を検証する"""
-    client = genai.Client(api_key=GEMINI_API_KEY)
-
     prompt = f"""
 情報リサーチが「このテーマ・この角度で」と指示したブリーフィングに対して、
 ライターの投稿案が意図通りに応えているか検証してください。
@@ -564,7 +591,7 @@ def check_consistency(post_text: str, briefing: str, luna_posts: str) -> dict:
 判定: [整合 / 部分整合 / 不整合]
 コメント（1文）:
 """
-    result = client.models.generate_content(model=GEMINI_MODEL, contents=prompt).text
+    result = call_gemini(prompt, GEMINI_API_KEY)
 
     consistency_match = re.search(r"総合整合スコア.*?(\d+)", result)
     consistency_score = int(consistency_match.group(1)) if consistency_match else 5
@@ -582,8 +609,15 @@ def check_consistency(post_text: str, briefing: str, luna_posts: str) -> dict:
 def detect_api_errors(comments: list) -> list[dict]:
     """コメント内のエラーパターンを検知する（エラーコメントのみ対象）"""
     # (パターン, エラー名, 対処法, 重大=True/一時的=False)
+    # ⚠️ 対処法の文言は「実際に使える手」しか書かないこと（2026-08-01 修正）。
+    #    以前ここには「モデルを gemini-2.0-flash-lite に変更」と書いてあったが、
+    #    utils/gemini_client.py に明記の通り gemini-2.0-* は free tier 枠=0 で使えない。
+    #    ＝ 自分の監視が、実行すると必ず失敗する復旧手順を案内していた。
     error_patterns = [
-        (r"(?:status|error|Error|エラー).*429",  "Gemini API レート制限超過",       "1分待って再実行。gemini_client.py が gemini-2.5-flash-lite → gemini-3-flash-preview に自動フォールバックします", False),
+        (r"全モデルが使用できませんでした|全モデルがレート制限",
+         "Gemini 全モデルの無料枠切れ（当日中の自動復旧なし）",
+         "2.5-flash / 2.5-flash-lite / 3-flash-preview の3枠すべてが枯渇。翌日の枠リセットを待つか、https://ai.dev/rate-limit で消費内訳を確認する", True),
+        (r"(?:status|error|Error|エラー).*429",  "Gemini API レート制限超過",       "call_gemini 経由なら 2.5-flash-lite → 3-flash-preview へ自動フォールバック済み（各モデル別枠）。単発なら再実行で復旧する", False),
         (r"(?:status|error|Error|エラー).*403",  "YouTube/Threads API 権限エラー",   "APIキーのスコープ・有効化状態を確認", True),
         (r"(?:status|error|Error|エラー).*(401|190)",  "Threads トークン期限切れ",   "scripts/refresh_threads_token.py を実行してトークンを更新", True),
         (r"(?:status|error|Error|エラー).*(500|502|503)",  "外部APIサーバーエラー",  "自動復旧を待つ（通常10分以内）", False),
@@ -616,8 +650,6 @@ def analyze_proactive_risks(post_text: str, briefing: str) -> list[dict]:
     まだ顕在化していないが、将来問題になりそうなリスクを先読みして検出する。
     例: トレンドとのズレ、競合投稿との類似、季節性の考慮漏れ 等
     """
-    client = genai.Client(api_key=GEMINI_API_KEY)
-
     prompt = f"""
 以下の投稿案について、「今は問題ないが将来リスクになる可能性がある点」を先読みしてください。
 
@@ -642,7 +674,7 @@ def analyze_proactive_risks(post_text: str, briefing: str) -> list[dict]:
 ---
 （リスクがなければ「先読みリスク: なし」と出力）
 """
-    result = client.models.generate_content(model=GEMINI_MODEL, contents=prompt).text
+    result = call_gemini(prompt, GEMINI_API_KEY)
 
     risks = []
     for block in result.split("---"):
@@ -672,7 +704,10 @@ def main():
 
     gh    = GitHubIssues(GITHUB_TOKEN, GITHUB_REPO)
     issue = gh.get_or_create_today_issue()
-    today = datetime.now().strftime("%Y-%m-%d")
+    # ⚠️ 2026-07-30: ここには `today = datetime.now().strftime("%Y-%m-%d")` があったが、
+    #    **一度も使われていない死んだ変数**だった。しかも UTC 基準なので、
+    #    もし使われていたら get_or_create_today_issue()（JST基準）と1日ズレていた。
+    #    日付が必要になったら now_jst().strftime("%Y-%m-%d") を使うこと。
 
     # 現在のステータスを取得
     from utils.github_issues import _parse_pipeline_statuses
@@ -697,6 +732,10 @@ def main():
         logger.info("健全性チェック実行中...")
         health_issues = check_pipeline_health(issue, statuses)
         api_errors    = detect_api_errors(comments)
+
+        # （キット注記）本体リポジトリではここで utils/gemini_guard.py が「Gemini を素で
+        #  叩くコードの復活」を毎日検査する。キットでは番人は同梱せず、配布物のビルド時に
+        #  運営側で同じ検査を通してから出荷している。
 
         # 重大エラー（認証失敗・トークン切れ等）のみアクション必要
         critical_api_errors = [e for e in api_errors if e.get("critical")]
@@ -725,10 +764,13 @@ def main():
         report_sections.append(section)
 
     # ── 2. 品質チェック（投稿案が存在する場合のみ）──────
+    # None のまま = 品質チェックは成功したかスキップされた。
+    # 文字列が入っていたら = Gemini が全滅した（レポートは出すが最後に exit 1 する）。
+    quality_check_failed = None
     if args.mode in ("quality", "full"):
         post_text = extract_recommended_post(comments)
         briefing  = extract_briefing(comments)
-        luna_posts = extract_luna_posts(comments)
+        writer_posts = extract_writer_posts(comments)
 
         # 品質チェック済みならスキップ（1日1回のみ実行）
         already_checked = any("3パス品質チェック結果" in c.body for c in comments)
@@ -736,22 +778,23 @@ def main():
             logger.info("品質チェックは既に実行済み。スキップします。")
 
         # 校閲承認申請済み or 人間承認済み or 投稿・計測済みなら差し戻しをしない
-        malfoy_approved = any("校閲より：承認申請" in c.body for c in comments)
+        reviewer_approved = any("校閲より：承認申請" in c.body for c in comments)
         human_approved = statuses.get("human", ("waiting", "-"))[0] == "done"
-        ron_posted = statuses.get("ron_post", ("waiting", "-"))[0] == "done"
-        skip_revision = malfoy_approved or human_approved or ron_posted
+        poster_posted = statuses.get("poster", ("waiting", "-"))[0] == "done"
+        skip_revision = reviewer_approved or human_approved or poster_posted
         if skip_revision:
-            reason = "校閲承認済み" if malfoy_approved else ("人間承認済み" if human_approved else "投稿済み")
+            reason = "校閲承認済み" if reviewer_approved else ("人間承認済み" if human_approved else "投稿済み")
             logger.info(f"{reason}のため、差し戻しはスキップします")
 
         if post_text and not already_checked:
-            logger.info("3パスリフレクション品質チェック実行中...")
-            buzz_voice = load_buzz_voice()
+            try:
+                logger.info("3パスリフレクション品質チェック実行中...")
+                buzz_voice = load_buzz_voice()
 
-            quality = three_pass_quality_check(post_text, briefing, buzz_voice, luna_posts)
+                quality = three_pass_quality_check(post_text, briefing, buzz_voice, writer_posts)
 
-            verdict_icon = "✅" if quality["verdict"] == "pass" else "❌"
-            section = f"""### {verdict_icon} 3パス品質チェック結果
+                verdict_icon = "✅" if quality["verdict"] == "pass" else "❌"
+                section = f"""### {verdict_icon} 3パス品質チェック結果
 
 **総合スコア: {quality['score']}点 / 100点**（合格ライン: {QUALITY_PASS_SCORE}点）
 **判定: {'合格' if quality['verdict'] == 'pass' else '不合格 → ライターに再作成を指示'}**
@@ -771,14 +814,14 @@ def main():
 **Pass 3: 統合判定**
 {quality['pass3']}
 """
-            if quality["risk_flags"]:
-                section += f"\n**⚠️ 最重要リスク:** {', '.join(quality['risk_flags'])}\n"
+                if quality["risk_flags"]:
+                    section += f"\n**⚠️ 最重要リスク:** {', '.join(quality['risk_flags'])}\n"
 
-            if quality["revision_needed"] and not skip_revision:
-                action_required = True
-                section += f"\n**ライターへの改善指示:**\n{quality['revision_instruction']}\n"
-                # ライターに差し戻しコメントを追加
-                gh.add_comment(issue.number, f"""## 🔦 監視より：品質チェック差し戻し
+                if quality["revision_needed"] and not skip_revision:
+                    action_required = True
+                    section += f"\n**ライターへの改善指示:**\n{quality['revision_instruction']}\n"
+                    # ライターに差し戻しコメントを追加
+                    gh.add_comment(issue.number, f"""## 🔦 監視より：品質チェック差し戻し
 
 3パスリフレクションの結果、品質基準（{QUALITY_PASS_SCORE}点）を満たしませんでした。
 
@@ -790,33 +833,47 @@ def main():
 ---
 *ライター、上記指示に従って投稿案を修正してください。*
 """)
-                gh.update_pipeline_status(issue.number, "writer", "running")
-            elif quality["revision_needed"] and skip_revision:
-                section += f"\n**注意:** スコアは{quality['score']}点ですが、承認済みのため差し戻しはスキップしました。\n"
-            report_sections.append(section)
+                    gh.update_pipeline_status(issue.number, "writer", "running")
+                elif quality["revision_needed"] and skip_revision:
+                    section += f"\n**注意:** スコアは{quality['score']}点ですが、承認済みのため差し戻しはスキップしました。\n"
+                report_sections.append(section)
 
-            # 整合性チェック
-            if briefing:
-                logger.info("整合性チェック実行中...")
-                consistency = check_consistency(post_text, briefing, luna_posts)
-                cons_icon   = "✅" if consistency["is_consistent"] else "⚠️"
-                section = f"""### {cons_icon} ブリーフィング整合性チェック
+                # 整合性チェック
+                if briefing:
+                    logger.info("整合性チェック実行中...")
+                    consistency = check_consistency(post_text, briefing, writer_posts)
+                    cons_icon   = "✅" if consistency["is_consistent"] else "⚠️"
+                    section = f"""### {cons_icon} ブリーフィング整合性チェック
 
 **整合スコア: {consistency['score']}/10**
 
 {consistency['detail'][:500]}
 """
-                report_sections.append(section)
-
-            # 先読みリスク分析
-            if args.mode == "full":
-                logger.info("先読みリスク分析中...")
-                proactive_risks = analyze_proactive_risks(post_text, briefing)
-                if proactive_risks:
-                    section = "### 🔮 先読みリスク分析\n\n"
-                    for r in proactive_risks:
-                        section += f"- **{r['risk']}**: {r['detail']}\n  → 推奨対処: {r['action']}\n"
                     report_sections.append(section)
+
+                # 先読みリスク分析
+                if args.mode == "full":
+                    logger.info("先読みリスク分析中...")
+                    proactive_risks = analyze_proactive_risks(post_text, briefing)
+                    if proactive_risks:
+                        section = "### 🔮 先読みリスク分析\n\n"
+                        for r in proactive_risks:
+                            section += f"- **{r['risk']}**: {r['detail']}\n  → 推奨対処: {r['action']}\n"
+                        report_sections.append(section)
+            except Exception as e:
+                # ⚠️ fail-lost 防止（2026-08-01 修正）
+                #    以前はここが素通しで、Gemini が 429 / 空応答で落ちると
+                #    **上で作り終えた健全性チェックの結果ごと**捨てて即死していた。
+                #    （07-26/28/29/30 は Issue に監視レポートが1件も残っていない）
+                #    品質チェックは「未実施」に降格させ、レポートは必ず Issue に出す。
+                quality_check_failed = f"{type(e).__name__}: {str(e)[:400]}"
+                logger.error(f"品質チェックに失敗しました: {quality_check_failed}")
+                report_sections.append(
+                    "### ⚠️ 品質チェック: 未実施（Gemini API エラー）\n\n"
+                    f"```\n{quality_check_failed}\n```\n\n"
+                    "→ **健全性チェックの結果はこのレポートに残っています**（未実施なのは品質チェックのみ）。\n"
+                    "→ 無料枠が回復してからワークフローを手動再実行すると、品質チェックだけやり直せます。\n\n"
+                )
         else:
             logger.info("投稿案がまだありません。品質チェックをスキップします。")
 
@@ -824,7 +881,7 @@ def main():
     if report_sections:
         report_body = f"""## 🔦 監視より：日次監視レポート
 
-**監視日時:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
+**監視日時:** {now_jst().strftime('%Y-%m-%d %H:%M')} JST
 **モード:** {args.mode}
 {'**⚠️ アクションが必要です**' if action_required else '**✅ 問題なし**'}
 
@@ -856,6 +913,13 @@ def main():
             })
 
     logger.info("=== 監視 日次監視完了 ===")
+
+    # ⚠️ exit(1) は「レポートを Issue に出し終えた**後**」でしか呼ばない。
+    #    Actions は赤くなる（＝異常に気づける）が、監視結果は Issue に残る。
+    #    ここより上で例外を投げて落ちる経路を作らないこと＝fail-lost の再発になる。
+    if quality_check_failed:
+        logger.error("品質チェックが未実施のため、異常終了します（レポートは投稿済み）")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

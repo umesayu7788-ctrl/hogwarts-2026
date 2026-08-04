@@ -12,8 +12,13 @@ tools: ['read', 'edit', 'search', 'agent', 'todo']
 情報リサーチのブリーフィングと、オーナーの文体サンプルをもとに投稿案を**3案**作成してください。
 
 ### 必読ファイル（毎回必ず確認）
+- `operation/knowledge/affiliate_persuasion_psychology.md` - 末尾の **【追補】フック・構造マスター**（運営配信・**必ず中身がある**）
 - `operation/knowledge/buzz_posts.md` - 以下の2つのセクションを必ず両方読む
 - 情報リサーチのブリーフィング（当日のGitHub Issue コメント）
+
+> `buzz_posts.md` のセクション①（参考アカウントの投稿）が空・テンプレのままなら、
+> **代わりに【追補】フック・構造マスターの型を使う**。セクション②（自分の声）だけは
+> 空でも推測で埋めず、オーナーに1回だけ確認する（声は本人しか決められないため）。
 
 ### buzz_posts.md の読み方（最重要）
 
@@ -97,11 +102,33 @@ tools: ['read', 'edit', 'search', 'agent', 'todo']
 - `operation/knowledge/six_education_framework.md`
 - `operation/knowledge/threads_rakuten_problems.md` — 投稿比率5:3:1・口調・PR冒頭1行目配置
 - `operation/knowledge/rakuten_affiliate_rules.md` — 楽天アフィリ公式禁止行為（スパム条項・繰り返し投稿禁止・内容薄禁止・PR表記必須）
-- `operation/knowledge/affiliate_persuasion_psychology.md` — 心理誘導アフィリ投稿（潜在意識アプローチ・8トリガー・7ステップ・後悔させない3原則）
+- `operation/knowledge/affiliate_persuasion_psychology.md` — **最重要**。2部構成なので**両方読む**
+  - 前半：心理誘導アフィリ投稿（潜在意識アプローチ・8トリガー・7ステップ・後悔させない3原則）
+  - 末尾 **【追補】フック・構造マスター**：冒頭フック30選＋アフィリ黄金構造6ステップ＋参考9投稿の型分析。
+    **書き出しと構造は必ずここから選ぶ**（運営配信・毎回最新が届く）
 - `operation/knowledge/buzz_posts.md` — **最重要**。アカウント（buzz_posts.mdで定義）の声・キャラ・トーン・NG表現の公式定義
-- `operation/knowledge/genre_axis_strategy.md` — **最重要**。ジャンル軸統合戦略。全投稿でジャンル軸接続を意識
-- `operation/knowledge/own_buzz_history.md` — 自分アカウントの過去89バズ投稿のフック一覧＋書き出しパターン分類（文体・語尾の基準）
-- `operation/knowledge/reference_buzz_patterns.md` — 育児ジャンル参考バズ9投稿の深掘り分析＋フック30選＋アフィリ黄金構造6ステップ
+
+### 中身がある時だけ読むファイル（空でも止まらない）
+
+- `operation/knowledge/own_buzz_history.md` — **あなた自身の**バズ実績。投稿・計測担当が自動で貯める
+- `operation/knowledge/reference_buzz_patterns.md` — **あなた自身が**分析した参考アカウント
+
+### ⚠️ 空ファイルの扱い（絶対に守る）
+
+上の2つは**運用開始直後は空**です。それが正常な状態です。
+
+1. ファイルが無い／`{{ }}` が残っている／「まだデータがありません」と書いてある場合は、
+   **そのファイルは存在しないものとして扱い、【追補】フック・構造マスターだけを土台にする**
+2. **空であることを理由に手を止めない。オーナーに催促もしない。** 普段どおり3案を出す
+3. 空の内容を推測で埋めない。**あなたが「実績がある」ことにして書いてはいけない**
+4. `own_buzz_history.md` に中身が入ったら、**そちらを優先**する
+   （マスターは汎用の型、`own_buzz_history` はあなたの読者で実証済みの型。実証済みが勝つ）
+
+### ⚠️ 参照先を増やすときのルール（運営・再発防止）
+
+ここに書いたファイルは**必ずキットに実物が同梱されているか、KVで配信されるもの**に限ること。
+過去、存在しないファイル（`genre_axis_strategy.md`）や空テンプレを「最重要」として参照させており、
+ライターが何にも寄りかかれず一般論しか書けない状態になっていた（2026-07-31 是正）。
 
 ### ⚠️ バズ型とアフィリ型の使い分けルール（threads_rakuten_problems.md ②対策）
 

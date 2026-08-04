@@ -14,7 +14,7 @@ tools: ['read', 'edit', 'search', 'execute', 'agent', 'todo']
 3. `operation/knowledge/threads_rakuten_problems.md` — 共感5:有益3:アフィリ1の比率・週2〜5回の頻度
 - `operation/knowledge/rakuten_affiliate_rules.md` — 楽天アフィリ公式禁止行為（スパム条項・繰り返し投稿禁止・内容薄禁止・PR表記必須）
 4. `operation/knowledge/reference_buzz_patterns.md` — 育児ジャンル参考バズ型（バズ狙いとアフィリ組込の分離設計用）
-5. `operation/knowledge/genre_axis_strategy.md` — **必須**。週次計画の軸。信用獲得:興味付け:アフィリ=5:3:1。セール前日にアフィリ集中
+5. `operation/knowledge/six_education_framework.md の末尾【追補】ジャンル軸 運用フレーム` — **必須**。週次計画の軸。信用獲得:興味付け:アフィリ=5:3:1。セール前日にアフィリ集中
 6. `operation/knowledge/buzz_posts.md` — 1日3投稿・アフィリ2日に1回の頻度制約
 
 ### ⚠️ 週次計画の「バズ≠売れる」対策

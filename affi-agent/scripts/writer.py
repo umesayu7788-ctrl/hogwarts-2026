@@ -1,5 +1,5 @@
 ﻿"""
-luna_write.py
+writer.py
 ライター担当: 情報リサーチのブリーフィングをもとに投稿案3案を作成するスクリプト
 ステップ③: ブリーフィング取得 → 投稿案3案生成 → GitHub Issues記録
 """
@@ -45,7 +45,6 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BUZZ_POSTS_PATH = os.path.join(SCRIPT_DIR, "..", "operation", "knowledge", "buzz_posts.md")
 OWN_BUZZ_HISTORY_PATH = os.path.join(SCRIPT_DIR, "..", "operation", "knowledge", "own_buzz_history.md")
-GENRE_AXIS_PATH = os.path.join(SCRIPT_DIR, "..", "operation", "knowledge", "genre_axis_strategy.md")
 PERSUASION_PATH = os.path.join(SCRIPT_DIR, "..", "operation", "knowledge", "affiliate_persuasion_psychology.md")
 AFFILIATE_STRUCTURE_PATH = os.path.join(SCRIPT_DIR, "..", "operation", "knowledge", "affiliate_post_structure.md")
 PRODUCTS_DIR = os.path.join(SCRIPT_DIR, "..", "operation", "products")
@@ -98,16 +97,22 @@ def load_own_buzz_hooks() -> str:
 
 
 def load_sleep_axis_brief() -> str:
-    """ジャンル軸戦略の要点を抽出（任意ファイル・無くても続行）"""
+    """ジャンル軸フレームの要点を抽出（無くても続行）。
+
+    2026-08-03 修正：以前は genre_axis_strategy.md を読んでいたが、
+    このファイルはどのキットにも存在せず、毎回 FileNotFoundError で空文字を返していた
+    （＝ジャンル軸の指示がプロンプトに一度も入っていなかった）。
+    中身は affiliate_persuasion_psychology.md の末尾【追補】へ移設済みなので、そちらを読む。
+    """
     try:
-        with open(GENRE_AXIS_PATH, "r", encoding="utf-8") as f:
+        with open(PERSUASION_PATH, "r", encoding="utf-8") as f:
             content = f.read()
-        # 「投稿テーマ → 軸への接続マップ」セクションがあればそこだけ
-        start = content.find("## 🌐 投稿テーマ →")
-        end = content.find("## 💰")
-        if start >= 0 and end > start:
-            return content[start:end].strip()
-        return content[:2000]
+        start = content.find("# 【追補】ジャンル軸 運用フレーム")
+        if start < 0:
+            return ""
+        end = content.find("\n# 【追補】", start + 10)
+        section = content[start:end] if end > start else content[start:]
+        return section[:3000].strip()
     except FileNotFoundError:
         return ""
 
@@ -122,7 +127,7 @@ def get_briefing_from_issue(issue_number: int, gh: GitHubIssues) -> str:
     return ""
 
 
-def get_malfoy_feedback(issue_number: int, gh: GitHubIssues) -> str:
+def get_reviewer_feedback(issue_number: int, gh: GitHubIssues) -> str:
     """校閲の差し戻し or オーナーの修正指示を取得する（あれば）"""
     comments = gh.get_comments(issue_number)
     for comment in reversed(comments):
@@ -181,7 +186,7 @@ def load_reference_posts() -> str:
         return "（参考投稿なし）"
 
 
-def generate_posts(briefing: str, voice_def: str, ref_posts: str, malfoy_feedback: str = "",
+def generate_posts(briefing: str, voice_def: str, ref_posts: str, reviewer_feedback: str = "",
                    own_hooks: str = "", sleep_axis: str = "",
                    product: dict = None, persuasion: str = "", post_type: str = "auto") -> str:
     """Gemini Flash で投稿案3案を生成する（タイムアウト・フォールバック付き）"""
@@ -248,8 +253,8 @@ def generate_posts(briefing: str, voice_def: str, ref_posts: str, malfoy_feedbac
 
     feedback_section = f"""
 ## ⚠️ 校閲からの前回差し戻し指摘（必ず反映すること）
-{malfoy_feedback}
-""" if malfoy_feedback else ""
+{reviewer_feedback}
+""" if reviewer_feedback else ""
 
     # ── アフィリ投稿セクション（post_type=affiliate のみ） ──
     affiliate_section = ""
@@ -832,7 +837,7 @@ def main():
     try:
         briefing = get_briefing_from_issue(issue.number, gh)
         if not briefing:
-            logger.error("情報リサーチのブリーフィングが見つかりません。先にhermione_research.pyを実行してください。")
+            logger.error("情報リサーチのブリーフィングが見つかりません。先にinfo_research.pyを実行してください。")
             gh.update_pipeline_status(issue.number, "writer", "error")
             sys.exit(1)
 
@@ -856,11 +861,11 @@ def main():
                 logger.info(f"今日のアフィリ商品: {product.get('name', '')[:50]}... ★{product.get('review_average')} ¥{product.get('price')}")
             else:
                 logger.warning("アフィリ投稿日だが商品データが見つかりません。商品リサーチが先に実行されているか確認してください。")
-        malfoy_feedback = get_malfoy_feedback(issue.number, gh)
-        if malfoy_feedback:
+        reviewer_feedback = get_reviewer_feedback(issue.number, gh)
+        if reviewer_feedback:
             logger.info("校閲の差し戻しコメントを取得しました。フィードバックを反映して再生成します。")
 
-        posts = generate_posts(briefing, voice_def, ref_posts, malfoy_feedback,
+        posts = generate_posts(briefing, voice_def, ref_posts, reviewer_feedback,
                                own_hooks=own_hooks, sleep_axis=sleep_axis,
                                product=product, persuasion=persuasion,
                                post_type=args.post_type)

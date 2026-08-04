@@ -64,7 +64,6 @@ jobs:
           GITHUB_REPO: ${{ github.repository }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
             mkdir -p credentials
@@ -74,7 +73,7 @@ jobs:
           cd scripts
           python auto_measure.py --target-date "${{ github.event.inputs.target_date }}"
 
-      - name: Commit updated files (buzz_posts.md + note_drafts)
+      - name: Commit updated files (buzz_posts.md)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -82,13 +81,10 @@ jobs:
           # buzz_posts.md の変更をステージ
           git add operation/knowledge/buzz_posts.md 2>/dev/null || true
 
-          # note_drafts/ の新規骨子ファイルをステージ
-          git add operation/note_drafts/*.md 2>/dev/null || true
-
           # 変更があればコミット
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "auto: バズ投稿ナレッジ・note骨子を追記"
+            git commit -m "auto: バズ投稿ナレッジを追記"
             git push
           fi

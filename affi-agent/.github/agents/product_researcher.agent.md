@@ -14,7 +14,7 @@ tools: ['read', 'edit', 'search', 'web', 'execute', 'agent', 'todo']
 3. `operation/knowledge/six_education_framework.md` — 投稿の文脈設計
 4. `operation/knowledge/threads_rakuten_problems.md` — 料率5%以上カテゴリ優先（コスメ8%・ファッション8%等）
 - `operation/knowledge/rakuten_affiliate_rules.md` — 楽天アフィリ公式禁止行為（スパム条項・繰り返し投稿禁止・内容薄禁止・PR表記必須）
-5. `operation/knowledge/genre_axis_strategy.md` — **必須**。商品選定時に「ジャンル軸接続の1行理由」を添える
+5. `operation/knowledge/six_education_framework.md の末尾【追補】ジャンル軸 運用フレーム` — **必須**。商品選定時に「ジャンル軸接続の1行理由」を添える
 6. `operation/knowledge/buzz_posts.md` — アカウント（buzz_posts.mdで定義）のターゲット・NGジャンル（投資/副業/美容医療/ビジネス/スピ）
 
 これらのルールに違反する商品は絶対に提案しないこと。

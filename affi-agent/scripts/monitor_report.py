@@ -1,5 +1,5 @@
 ﻿"""
-snape_report.py
+monitor_report.py
 監視担当: 週次コスト・エンゲージメント監視レポートを生成するスクリプト
 毎週月曜日に GitHub Actions から自動実行
 """
@@ -82,7 +82,7 @@ def parse_engagement_from_issue(issue) -> dict:
     return data
 
 
-def generate_snape_report(weekly_issues: list, week_str: str) -> str:
+def generate_monitor_report(weekly_issues: list, week_str: str) -> str:
     """監視の週次レポートを生成する"""
     post_count   = sum(1 for d in weekly_issues if d["engagement"]["posted"])
     likes_list   = [d["engagement"]["likes"] for d in weekly_issues if d["engagement"]["posted"]]
@@ -144,11 +144,13 @@ def main():
     week_num = now.strftime("%YW%V")
 
     # レポート生成
-    report = generate_snape_report(weekly_issues, week_str)
+    report = generate_monitor_report(weekly_issues, week_str)
 
     # ファイル保存
+    # 新規分は monitor_report_ で書き出す。以前のプレフィックスで書き出した過去分は
+    # 改名しない（過去との連続性が切れるため）。読む側は `*_report_*.md` で新旧とも拾う。
     WEEKLY_DIR.mkdir(parents=True, exist_ok=True)
-    report_path = WEEKLY_DIR / f"snape_report_{week_num}.md"
+    report_path = WEEKLY_DIR / f"monitor_report_{week_num}.md"
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(report)
     logger.info(f"レポート保存: {report_path}")

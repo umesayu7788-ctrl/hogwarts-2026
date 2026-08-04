@@ -17,8 +17,8 @@ PIPELINE_STEPS = [
     ("writer",     "③  ライティング",    "✍️  ライター"),
     ("reviewer",   "④  校閲",            "🧐 校閲"),
     ("human",    "⑤  人間承認",        "👤 オーナー"),
-    ("ron_post", "⑥  投稿",            "📤 投稿・計測"),
-    ("ron_fetch","⑦  計測（24h後）",   "📊 投稿・計測"),
+    ("poster", "⑥  投稿",            "📤 投稿・計測"),
+    ("poster_fetch","⑦  計測（24h後）",   "📊 投稿・計測"),
 ]
 
 STATUS_ICON = {
@@ -183,7 +183,7 @@ class GitHubIssues:
         Issue本文のパイプラインステータステーブルを更新する。
 
         Args:
-            step_key: "info_researcher" / "writer" / "reviewer" / "human" / "ron_post" / "ron_fetch"
+            step_key: "info_researcher" / "writer" / "reviewer" / "human" / "poster" / "poster_fetch"
             status:   "waiting" / "running" / "done" / "pending" / "skipped" / "error"
             timestamp: 表示する時刻文字列（省略時は現在時刻）
         """

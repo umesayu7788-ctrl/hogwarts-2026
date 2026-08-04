@@ -78,6 +78,7 @@ def call_gemini(prompt: str, api_key: str = None, system_instruction: str = None
         config = _make_config()
 
     exhausted_models = []
+    empty_models = []
 
     for i, model in enumerate(GEMINI_MODEL_CHAIN):
         try:
@@ -87,9 +88,24 @@ def call_gemini(prompt: str, api_key: str = None, system_instruction: str = None
                 contents=prompt,
                 config=config,
             )
+            # ⚠️ response.text は例外を出さずに None を返すことがある
+            #    （safety block / finish_reason 異常 / 候補ゼロ）。
+            #    そのまま return すると呼び出し元が str のつもりで触って
+            #    "TypeError: 'NoneType' object is not subscriptable" で落ちる。
+            #    （2026-07-03・07-26 に monitor_daily.py で実際に発生）
+            #    ここで「このモデルはダメだった」扱いにして次のモデルへ回す。
+            text = response.text
+            if text is None:
+                empty_models.append(model)
+                logger.warning(f"{model} → 応答が空（response.text is None）")
+                if i < len(GEMINI_MODEL_CHAIN) - 1:
+                    logger.info(f"→ 次のモデル {GEMINI_MODEL_CHAIN[i+1]} にフォールバック")
+                    time.sleep(3)
+                continue
+
             if i > 0:
                 logger.info(f"フォールバック成功: {model}")
-            return response.text
+            return text
 
         except Exception as e:
             if _is_retryable(e):
@@ -103,9 +119,15 @@ def call_gemini(prompt: str, api_key: str = None, system_instruction: str = None
                 logger.error(f"{model} エラー: {type(e).__name__}: {str(e)[:300]}")
                 raise
 
-    model_list = ", ".join(exhausted_models)
+    reasons = []
+    if exhausted_models:
+        reasons.append(f"レート制限/サーバーエラー: {', '.join(exhausted_models)}")
+    if empty_models:
+        reasons.append(f"空応答(None): {', '.join(empty_models)}")
+    detail = " / ".join(reasons) if reasons else "原因不明"
+
     raise RuntimeError(
-        f"Gemini API: 全モデルがレート制限中です ({model_list})。"
+        f"Gemini API: 全モデルが使用できませんでした（{detail}）。"
         f" 日の無料枠を使い切った可能性があります。"
         f" 1〜2時間後に自動リトライするか、手動でワークフローを再実行してください。"
     )

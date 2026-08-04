@@ -5,6 +5,18 @@
 #   buzz_posts.md / own_buzz_history.md(auto_measure自動更新) /
 #   reference_buzz_patterns.md / affiliate_post_structure.md … 顧客が記入・蓄積するファイル
 # ※ kb_sys_ref_v001.md は旧auth(月次トークン/SYS_VER_LOCK)用なので、旧auth撤去フェーズで扱う。
+#
+# 🚨 このリストに行を足しても既存顧客には届かない（ワークフローは**顧客ローカルの**このファイルを
+#    読むため、追加はZIP再配布でしか効かない）。既存顧客に今すぐ届けたい内容は、
+#    **新ファイルを作らず、下の3本のどれかに追補する**こと。
+#
+# 2026-07-31：フック・構造マスターを affiliate_persuasion_psychology.md に追補した。
+#   経緯＝冒頭フック30選・アフィリ黄金構造6ステップ・参考9投稿の分析は運営IPなのに、
+#   「運営が書く型」と「顧客が書く分析欄」が reference_buzz_patterns.md に**同居**していたため
+#   顧客記入ファイルに分類され、まるごとKV対象外だった。結果、配布キットの当該ファイルは
+#   {{}} テンプレのままで、ライターが寄りかかる土台をひとつも持てず一般論しか書けなかった。
+#   → 再発防止：新しいKBは「運営が書くのか／顧客が書くのか」で必ずファイルを割る。
+#     1ファイルに両方入れると、また丸ごと配信対象外になる。
 affiliate_persuasion_psychology.md
 rakuten_affiliate_rules.md
 six_education_framework.md

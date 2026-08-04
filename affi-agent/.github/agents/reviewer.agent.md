@@ -106,7 +106,7 @@ GitHubのこのIssueに「承認」とコメントしてください。
 - `operation/knowledge/rakuten_affiliate_rules.md` — 楽天アフィリ公式禁止行為（スパム条項・繰り返し投稿禁止・内容薄禁止・PR表記必須）
 - `operation/knowledge/affiliate_persuasion_psychology.md` — 心理誘導アフィリ投稿（潜在意識アプローチ・8トリガー・7ステップ・後悔させない3原則）
 - `operation/knowledge/buzz_posts.md` — アカウント（buzz_posts.mdで定義）の公式声・NG表現リスト（高圧的/見下し/断定等）
-- `operation/knowledge/genre_axis_strategy.md` — アフィリ投稿でジャンル軸接続が1文もない場合は差し戻し候補
+- `operation/knowledge/six_education_framework.md の末尾【追補】ジャンル軸 運用フレーム` — アフィリ投稿でジャンル軸接続が1文もない場合は差し戻し候補
 - `operation/knowledge/own_buzz_history.md` — 自分アカウント89投稿の書き出し傾向から乖離していないかチェック
 - `operation/knowledge/reference_buzz_patterns.md` — 育児ジャンル参考バズの型・コンプラ警告リスト・黄金構造と比較して審査
 

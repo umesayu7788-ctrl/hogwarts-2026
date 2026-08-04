@@ -1,5 +1,5 @@
 ﻿"""
-malfoy_review.py
+content_review.py
 校閲担当: 投稿案3案を厳格に校閲し、承認申請または差し戻しを行うスクリプト
 ステップ④: 投稿案取得 → チェック → 承認申請 or 差し戻し
 """
@@ -38,7 +38,7 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 MAX_RETRY      = 2   # 差し戻し最大回数
 
 
-def get_luna_posts(issue_number: int, gh: GitHubIssues) -> str:
+def get_writer_posts(issue_number: int, gh: GitHubIssues) -> str:
     """GitHub IssueのコメントからライターのAB3案を取得する"""
     comments = gh.get_comments(issue_number)
     for comment in reversed(comments):
@@ -150,16 +150,16 @@ def clean_post_text(text: str) -> str:
     return "\n".join(cleaned).strip()
 
 
-def extract_all_slot_texts(luna_posts: str) -> dict:
+def extract_all_slot_texts(writer_posts: str) -> dict:
     """ライターの投稿案から各スロット（1/2/3）のテキストを抽出する"""
     slots = {}
     slot_markers = [("SLOT_1", 1), ("SLOT_2", 2), ("SLOT_3", 3)]
 
     for marker, slot_num in slot_markers:
-        if marker not in luna_posts:
+        if marker not in writer_posts:
             continue
-        start = luna_posts.find(marker)
-        section = luna_posts[start:]
+        start = writer_posts.find(marker)
+        section = writer_posts[start:]
         lines = section.split("\n")
         bars = [i for i, line in enumerate(lines) if "━" in line]
         if len(bars) >= 2:
@@ -179,18 +179,18 @@ def main():
     gh.update_pipeline_status(issue.number, "reviewer", "running")
 
     try:
-        luna_posts = get_luna_posts(issue.number, gh)
-        if not luna_posts:
-            logger.error("ライターの投稿案が見つかりません。先にluna_write.pyを実行してください。")
+        writer_posts = get_writer_posts(issue.number, gh)
+        if not writer_posts:
+            logger.error("ライターの投稿案が見つかりません。先にwriter.pyを実行してください。")
             gh.update_pipeline_status(issue.number, "reviewer", "error")
             sys.exit(1)
 
-        review_result = review_posts(luna_posts)
+        review_result = review_posts(writer_posts)
         is_approved   = "全スロット承認申請可" in review_result or "承認申請可" in review_result
         logger.info(f"審査結果: {'承認申請可' if is_approved else '差し戻し'}")
 
         if is_approved:
-            slot_texts = extract_all_slot_texts(luna_posts)
+            slot_texts = extract_all_slot_texts(writer_posts)
 
             slot1_text = slot_texts.get(1, "（SLOT_1 抽出失敗）")
             slot2_text = slot_texts.get(2, "（SLOT_2 抽出失敗）")
